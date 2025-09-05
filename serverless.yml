@@ -1,0 +1,66 @@
+service: backend-core
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.10
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  memorySize: 128
+  timeout: 30
+  environment:
+    # Global environment variables
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+  iam:
+    role:
+      statements:
+        # Default permissions for all functions
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:*:*:*"
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!venv/**'
+    - '!.gitignore'
+    - '!.git/**'
+    - '!__pycache__/**'
+    - '!tests/**'
+    - '!.pytest_cache/**'
+
+functions:
+  hello:
+    handler: src/functions/hello/handler.main
+    description: Example Lambda function
+    events:
+      - http:
+          path: hello
+          method: get
+          cors: true
+    package:
+      patterns:
+        - src/functions/hello/**
+        - src/shared/**
+    environment:
+      # Function specific environment variables
+      FUNCTION_NAME: hello
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
+    layer: true
+    slim: true
+    useDownloadCache: true
+    useStaticCache: true
+    pythonBin: python3.10
