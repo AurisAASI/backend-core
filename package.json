@@ -1,0 +1,20 @@
+{
+  "name": "backend-core",
+  "version": "1.0.0",
+  "description": "Backend core services using Serverless Framework and AWS Lambda with Python 3.10",
+  "scripts": {
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod",
+    "remove:dev": "serverless remove --stage dev",
+    "remove:prod": "serverless remove --stage prod",
+    "offline": "serverless offline start",
+    "test": "pytest tests --cov=src --cov-report=html --verbose",
+    "format": "black src tests && isort src tests && flake8 src tests",
+    "format:check": "black --check src tests && isort --check-only src tests && flake8 src tests"
+  },
+  "devDependencies": {
+    "serverless": "^3.33.0",
+    "serverless-offline": "^14.4.0",
+    "serverless-python-requirements": "^6.0.0"
+  }
+}
