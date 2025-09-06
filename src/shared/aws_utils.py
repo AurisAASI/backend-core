@@ -1,7 +1,7 @@
 """
 Common utility functions for AWS services
 """
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import boto3
 
