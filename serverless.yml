@@ -50,6 +50,12 @@ package:
     - '!tests/**'
     - '!.pytest_cache/**'
     - '!.vscode/**'
+    - '!htmlcov/**'
+    - '!.github/**'
+    - '.flake8'
+    - '!.env.example'
+    - '!.coverage*'
+    - '!README.md'
 
 functions:
   hello:
