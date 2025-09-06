@@ -15,6 +15,18 @@ provider:
     # Global environment variables
     STAGE: ${self:provider.stage}
     REGION: ${self:provider.region}
+    # API Key from AWS Cognito stored in environment
+    API_KEY: ${env:API_KEY, ''}
+  apiGateway:
+    # Enable API Gateway API keys
+    apiKeys:
+      - name: ${self:service}-${self:provider.stage}-key
+        description: API key for ${self:service} service in ${self:provider.stage} stage
+        value: ${env:API_KEY, ''}  # Use value from environment variables
+    usagePlan:
+      throttle:
+        burstLimit: 200
+        rateLimit: 100
   iam:
     role:
       statements:
@@ -48,6 +60,7 @@ functions:
           path: hello
           method: get
           cors: true
+          private: true  # Require API key
     package:
       patterns:
         - src/functions/hello/**
@@ -59,8 +72,12 @@ functions:
 plugins:
   - serverless-python-requirements
   - serverless-offline
+  - serverless-add-api-key
 
 custom:
+  apiKey:
+    name: ${self:service}-${self:provider.stage}-api-key
+    description: API key for ${self:service} service in ${self:provider.stage} stage
   pythonRequirements:
     dockerizePip: false
     layer: true
