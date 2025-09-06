@@ -1,6 +1,8 @@
+org: acsfti
+
 service: backend-core
 
-frameworkVersion: '3'
+frameworkVersion: '4'
 
 provider:
   name: aws
@@ -28,12 +30,14 @@ package:
   individually: true
   patterns:
     - '!node_modules/**'
+    - '!.venv/**'
     - '!venv/**'
     - '!.gitignore'
     - '!.git/**'
     - '!__pycache__/**'
     - '!tests/**'
     - '!.pytest_cache/**'
+    - '!.vscode/**'
 
 functions:
   hello:
@@ -58,7 +62,7 @@ plugins:
 
 custom:
   pythonRequirements:
-    dockerizePip: true
+    dockerizePip: false
     layer: true
     slim: true
     useDownloadCache: true
