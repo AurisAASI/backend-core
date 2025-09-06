@@ -2,9 +2,10 @@ import json
 import logging
 import os
 
+from aws_lambda_powertools import Logger
+
 # Configure basic logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = Logger(service="hello-function")
 
 
 def main(event, context):
