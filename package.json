@@ -13,7 +13,7 @@
     "format:check": "black --check src tests && isort --check-only src tests && flake8 src tests"
   },
   "devDependencies": {
-    "serverless": "^3.33.0",
+    "serverless": "^4.0.0",
     "serverless-offline": "^14.4.0",
     "serverless-python-requirements": "^6.0.0"
   }
