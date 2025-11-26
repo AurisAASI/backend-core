@@ -6,11 +6,8 @@ from typing import Any, Dict, Optional
 import boto3
 import requests
 from aws_lambda_powertools import Logger
-from dotenv import load_dotenv
 
 from src.shared.utils import response
-
-load_dotenv()  # Load environment variables from .env file
 
 # Configure basic logging
 logger = Logger(service='city-collector')
@@ -58,7 +55,6 @@ def city_collector(event, context):
         logger.info(f'Processing collection for city: {city} in state: {state}')
 
         # Step 2: Queue scraping task for the city/state
-        # TODO Terminar logica para SQS para mndar para aasi_scrapper
         sqs_client = boto3.client('sqs')
         sqs_response = sqs_client.send_message(
             QueueUrl=os.environ.get('SCRAPER_TASK_QUEUE_URL'),
