@@ -1,14 +1,10 @@
 import json
-import os
 from http import HTTPStatus
 from typing import Any, Dict, Optional
 
 from aws_lambda_powertools import Logger
-from dotenv import load_dotenv
 
 from src.models.scrappers import aasi_scrapper
-
-load_dotenv()  # Load environment variables from .env file
 
 # Configure basic logging
 logger = Logger(service='aasi-scraper')
