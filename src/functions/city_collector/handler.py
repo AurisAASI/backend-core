@@ -7,6 +7,7 @@ import boto3
 import requests
 from aws_lambda_powertools import Logger
 
+from src.shared.settings import settings
 from src.shared.utils import response
 
 # Configure basic logging
@@ -52,7 +53,10 @@ def city_collector(event, context):
                 status_code=HTTPStatus.NOT_FOUND,
             )
 
-        logger.info(f'Processing collection for city: {city} in state: {state}')
+        logger.info(
+            f'Processing collection - Stage: {settings.stage}, '
+            f'City: {city}, State: {state}, Niche: {niche}'
+        )
 
         # Step 2: Queue scraping task for the city/state
         sqs_client = boto3.client('sqs')

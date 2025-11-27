@@ -18,6 +18,11 @@ provider:
     REGION: ${self:provider.region}
     # API Key from AWS Cognito stored in environment
     API_KEY: ${env:API_KEY, ''}
+    # Google Places API configuration (stage-specific)
+    GOOGLE_PLACES_API_KEY_DEV: ${env:GOOGLE_PLACES_API_KEY_DEV, ''}
+    GOOGLE_PLACES_API_KEY_PROD: ${env:GOOGLE_PLACES_API_KEY_PROD, ''}
+    GOOGLE_PLACES_DAILY_QUOTA_LIMIT_DEV: ${env:GOOGLE_PLACES_DAILY_QUOTA_LIMIT_DEV, '10000'}
+    GOOGLE_PLACES_DAILY_QUOTA_LIMIT_PROD: ${env:GOOGLE_PLACES_DAILY_QUOTA_LIMIT_PROD, '20000'}
   apiGateway:
     # Enable API Gateway API keys
     apiKeys:
@@ -101,7 +106,6 @@ functions:
       - sqs:
           arn: !GetAtt ScraperTaskQueue.Arn
           batchSize: 1
-          functionResponseType: ReportBatchItemFailures
     package:
       patterns:
         - src/functions/data_scrapper/**
@@ -109,6 +113,21 @@ functions:
         - src/models/**
     environment:
       FUNCTION_NAME: data_scrapper
+      COMPANIES_TABLE: !Ref CompaniesTable
+      PLACES_TABLE: !Ref PlacesTable
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:Scan
+          - dynamodb:Query
+        Resource:
+          - !GetAtt PlacesTable.Arn
+          - !GetAtt CompaniesTable.Arn
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
 plugins:
   - serverless-offline
@@ -128,6 +147,59 @@ custom:
 
 resources:
   Resources:
+    # DynamoDB Tables
+    CompaniesTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
+      Properties:
+        TableName: ${self:provider.stage}-auris-core-companies
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: companyID
+            AttributeType: S
+        KeySchema:
+          - AttributeName: companyID
+            KeyType: HASH
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Environment
+            Value: ${self:provider.stage}
+
+    PlacesTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
+      Properties:
+        TableName: ${self:provider.stage}-auris-core-places
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: placeID
+            AttributeType: S
+          - AttributeName: companyID
+            AttributeType: S
+        KeySchema:
+          - AttributeName: placeID
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: companyID-index
+            KeySchema:
+              - AttributeName: companyID
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Environment
+            Value: ${self:provider.stage}
+
+    # SQS Queues
     ScraperTaskQueue:
       Type: AWS::SQS::Queue
       Properties:
