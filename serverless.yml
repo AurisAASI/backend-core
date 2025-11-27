@@ -113,8 +113,8 @@ functions:
         - src/models/**
     environment:
       FUNCTION_NAME: data_scrapper
-      COMPANIES_TABLE: !Ref CompaniesTable
-      PLACES_TABLE: !Ref PlacesTable
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      PLACES_TABLE: ${self:provider.stage}-auris-core-places
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -124,8 +124,10 @@ functions:
           - dynamodb:Scan
           - dynamodb:Query
         Resource:
-          - !GetAtt PlacesTable.Arn
-          - !GetAtt CompaniesTable.Arn
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places/index/*
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
@@ -147,57 +149,8 @@ custom:
 
 resources:
   Resources:
-    # DynamoDB Tables
-    CompaniesTable:
-      Type: AWS::DynamoDB::Table
-      DeletionPolicy: Retain
-      UpdateReplacePolicy: Retain
-      Properties:
-        TableName: ${self:provider.stage}-auris-core-companies
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: companyID
-            AttributeType: S
-        KeySchema:
-          - AttributeName: companyID
-            KeyType: HASH
-        Tags:
-          - Key: Service
-            Value: ${self:service}
-          - Key: Stage
-            Value: ${self:provider.stage}
-          - Key: Environment
-            Value: ${self:provider.stage}
-
-    PlacesTable:
-      Type: AWS::DynamoDB::Table
-      DeletionPolicy: Retain
-      UpdateReplacePolicy: Retain
-      Properties:
-        TableName: ${self:provider.stage}-auris-core-places
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: placeID
-            AttributeType: S
-          - AttributeName: companyID
-            AttributeType: S
-        KeySchema:
-          - AttributeName: placeID
-            KeyType: HASH
-        GlobalSecondaryIndexes:
-          - IndexName: companyID-index
-            KeySchema:
-              - AttributeName: companyID
-                KeyType: HASH
-            Projection:
-              ProjectionType: ALL
-        Tags:
-          - Key: Service
-            Value: ${self:service}
-          - Key: Stage
-            Value: ${self:provider.stage}
-          - Key: Environment
-            Value: ${self:provider.stage}
+    # DynamoDB Tables are managed externally (already exist)
+    # Tables: ${self:provider.stage}-auris-core-companies, ${self:provider.stage}-auris-core-places
 
     # SQS Queues
     ScraperTaskQueue:
