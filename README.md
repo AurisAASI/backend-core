@@ -57,6 +57,67 @@ backend-core/
    pip install -r requirements.txt
    ```
 
+## Environment Configuration
+
+This project supports multiple environments (dev/prod) with centralized configuration management.
+
+### Environment Variables
+
+Create a `.env` file in the project root with the following variables:
+
+```bash
+# AWS Configuration
+AWS_ACCOUNT_ID=your-account-id
+ALARM_EMAIL=your-email@example.com
+
+# Google Places API Keys (Stage-specific)
+GOOGLE_PLACES_API_KEY_DEV=your-dev-api-key
+GOOGLE_PLACES_API_KEY_PROD=your-prod-api-key
+
+# Google Places API Daily Quota Limits
+GOOGLE_PLACES_DAILY_QUOTA_LIMIT_DEV=10000
+GOOGLE_PLACES_DAILY_QUOTA_LIMIT_PROD=20000
+```
+
+### Centralized Settings
+
+The project uses `src/shared/settings.py` for centralized configuration management:
+
+- **Automatic stage detection**: Reads `STAGE` environment variable (injected by Serverless Framework)
+- **Dynamic resource naming**: All AWS resources are prefixed with stage (`dev-` or `prod-`)
+- **Stage-specific API keys**: Automatically selects the correct Google API key per environment
+- **Configurable quotas**: Different quota limits for dev and prod environments
+
+### Resource Naming Convention
+
+All AWS resources follow the pattern: `{stage}-auris-core-{resource-type}`
+
+**Development (dev):**
+- DynamoDB: `dev-auris-core-companies`, `dev-auris-core-places`
+- Lambda: `backend-core-dev-city_collector`, `backend-core-dev-data_scrapper`
+- SQS: `backend-core-dev-scraper-tasks`
+
+**Production (prod):**
+- DynamoDB: `prod-auris-core-companies`, `prod-auris-core-places`
+- Lambda: `backend-core-prod-city_collector`, `backend-core-prod-data_scrapper`
+- SQS: `backend-core-prod-scraper-tasks`
+
+### DynamoDB Tables
+
+DynamoDB tables are automatically created by Serverless Framework with:
+- **DeletionPolicy: Retain** - Tables won't be deleted if stack is removed
+- **UpdateReplacePolicy: Retain** - Tables won't be replaced during updates
+- **Pay-per-request billing** - No capacity planning needed
+
+**Companies Table:**
+- Primary Key: `companyID` (String)
+- Contains: Company metadata, collection status, niche information
+
+**Places Table:**
+- Primary Key: `placeID` (String)
+- Global Secondary Index: `companyID-index` for efficient company-to-places lookups
+- Contains: Google Places data, links to company records
+
 ## Local Development
 
 Run the API locally using Serverless Offline:
@@ -170,15 +231,31 @@ xdg-open htmlcov/index.html  # Linux
 
 ## Deployment
 
-Deploy to dev environment:
+### Deploy to Development
+
+Deploys to `dev` stage with dev-specific resources and configuration:
 ```bash
 npm run deploy:dev
 ```
 
-Deploy to production:
+This will:
+- Create/update `dev-auris-core-*` DynamoDB tables
+- Deploy Lambda functions with dev API keys
+- Use dev quota limits (10,000/day default)
+
+### Deploy to Production
+
+Deploys to `prod` stage with production resources and configuration:
 ```bash
 npm run deploy:prod
 ```
+
+This will:
+- Create/update `prod-auris-core-*` DynamoDB tables
+- Deploy Lambda functions with prod API keys
+- Use prod quota limits (20,000/day default)
+
+**Important:** Ensure you have configured `GOOGLE_PLACES_API_KEY_PROD` in your `.env` file before deploying to production.
 
 ## Remove Stack
 
