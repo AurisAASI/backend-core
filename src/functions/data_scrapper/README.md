@@ -294,15 +294,15 @@ aws lambda invoke \
 
 ### Local Testing
 ```python
-from src.models.scrappers.aasi_scrapper import InformationScrapper
+from src.models.scrappers.aasi_scrapper import GMapsScrapper
 
-scrapper = InformationScrapper(
+scrapper = GMapsScrapper(
     niche='aasi',
     api_key='YOUR_API_KEY',
     daily_quota_limit=20000
 )
 
-scrapper.collect_places(city='SÃO PAULO', state='SP')
+scrapper.collect_data(city='SÃO PAULO', state='SP')
 
 print(f"Status: {scrapper.ensamble['status']}")
 print(f"Places: {len(scrapper.ensamble['places'])}")

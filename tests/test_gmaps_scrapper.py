@@ -1,7 +1,7 @@
 """
-Test cases for the InformationScrapper class.
+Test cases for the GMapsScrapper class.
 
-This test file validates the InformationScrapper functionality including:
+This test file validates the GMapsScrapper functionality including:
 - Constructor initialization
 - Google Places API integration (Text Search and Details)
 - Deduplication logic (by place_id and geolocation)
@@ -20,7 +20,7 @@ import pytest
 # Add src directory to the path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from src.models.scrappers.information_scrapper import InformationScrapper
+from src.models.scrappers.gmaps_scrapper import GMapsScrapper
 
 
 # Fixtures
@@ -137,7 +137,7 @@ def mock_place_details_response():
 @pytest.fixture
 def mock_database_handler(mock_env_vars):
     """Mock DatabaseHandler."""
-    with patch('src.models.scrappers.information_scrapper.DatabaseHandler') as mock_db:
+    with patch('src.models.scrappers.gmaps_scrapper.DatabaseHandler') as mock_db:
         mock_db_instance = MagicMock()
 
         # Mock get_item to return None (place doesn't exist)
@@ -158,14 +158,14 @@ def mock_database_handler(mock_env_vars):
 
 
 # Tests for Constructor
-class TestInformationScrapperConstructor:
-    """Tests for InformationScrapper constructor initialization."""
+class TestGMapsScrapperConstructor:
+    """Tests for GMapsScrapper constructor initialization."""
 
     def test_constructor_with_valid_parameters(
         self, valid_api_key, mock_database_handler
     ):
         """Test that constructor initializes correctly with valid parameters."""
-        scrapper = InformationScrapper(
+        scrapper = GMapsScrapper(
             niche='aasi', api_key=valid_api_key, daily_quota_limit=20000
         )
 
@@ -180,7 +180,7 @@ class TestInformationScrapperConstructor:
 
     def test_constructor_loads_search_terms(self, valid_api_key, mock_database_handler):
         """Test that constructor loads search terms from JSON file."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
 
         assert isinstance(scrapper.search_terms, list)
         assert len(scrapper.search_terms) == 3
@@ -190,7 +190,7 @@ class TestInformationScrapperConstructor:
 
     def test_constructor_with_invalid_niche(self, valid_api_key, mock_database_handler):
         """Test constructor with niche that has no search terms."""
-        scrapper = InformationScrapper(niche='invalid_niche', api_key=valid_api_key)
+        scrapper = GMapsScrapper(niche='invalid_niche', api_key=valid_api_key)
 
         assert scrapper.search_terms == []
 
@@ -198,20 +198,20 @@ class TestInformationScrapperConstructor:
         self, valid_api_key, mock_database_handler
     ):
         """Test that constructor initializes database handler."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
 
         assert scrapper.db_handler is not None
 
 
 # Tests for Helper Methods
-class TestInformationScrapperHelperMethods:
-    """Tests for InformationScrapper helper methods."""
+class TestGMapsScrapperHelperMethods:
+    """Tests for GMapsScrapper helper methods."""
 
     def test_calculate_distance_same_location(
         self, valid_api_key, mock_database_handler
     ):
         """Test distance calculation for same location returns 0."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
 
         distance = scrapper._calculate_distance(
             -23.5505199, -46.6333094, -23.5505199, -46.6333094
@@ -223,7 +223,7 @@ class TestInformationScrapperHelperMethods:
         self, valid_api_key, mock_database_handler
     ):
         """Test distance calculation between different locations."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
 
         # Distance between two points in São Paulo (approx 2.4 km)
         distance = scrapper._calculate_distance(
@@ -240,7 +240,7 @@ class TestInformationScrapperHelperMethods:
         self, valid_api_key, mock_database_handler
     ):
         """Test duplicate detection when location is within 50m threshold."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
 
         existing_places = [
             {
@@ -261,7 +261,7 @@ class TestInformationScrapperHelperMethods:
         self, valid_api_key, mock_database_handler
     ):
         """Test that locations outside 50m threshold are not duplicates."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
 
         existing_places = [
             {
@@ -279,7 +279,7 @@ class TestInformationScrapperHelperMethods:
 
     def test_check_quota_within_limit(self, valid_api_key, mock_database_handler):
         """Test quota check when within limit."""
-        scrapper = InformationScrapper(
+        scrapper = GMapsScrapper(
             niche='aasi', api_key=valid_api_key, daily_quota_limit=1000
         )
         scrapper.quota_used = 500
@@ -291,7 +291,7 @@ class TestInformationScrapperHelperMethods:
 
     def test_check_quota_exceeds_limit(self, valid_api_key, mock_database_handler):
         """Test quota check when exceeding limit."""
-        scrapper = InformationScrapper(
+        scrapper = GMapsScrapper(
             niche='aasi', api_key=valid_api_key, daily_quota_limit=1000
         )
         scrapper.quota_used = 950
@@ -303,13 +303,13 @@ class TestInformationScrapperHelperMethods:
         assert 'quota limit reached' in scrapper.ensamble['status_reason'].lower()
 
 
-# Tests for collect_places Method
-class TestInformationScrapperCollectPlaces:
-    """Tests for the collect_places method."""
+# Tests for collect_data Method
+class TestGMapsScrapperCollectPlaces:
+    """Tests for the collect_data method."""
 
-    @patch('src.models.scrappers.information_scrapper.requests.get')
-    @patch('src.models.scrappers.information_scrapper.requests.post')
-    def test_collect_places_successful_collection(
+    @patch('src.models.scrappers.gmaps_scrapper.requests.get')
+    @patch('src.models.scrappers.gmaps_scrapper.requests.post')
+    def test_collect_data_successful_collection(
         self,
         mock_post,
         mock_get,
@@ -331,17 +331,17 @@ class TestInformationScrapperCollectPlaces:
         mock_details_response.raise_for_status.return_value = None
         mock_get.return_value = mock_details_response
 
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-        scrapper.collect_places(city='SÃO PAULO', state='SP')
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         # Verify places were collected
         assert len(scrapper.ensamble['places']) > 0
         assert scrapper.ensamble['status'] in ['completed', 'partial_quota_exceeded']
         assert scrapper.quota_used > 0
 
-    @patch('src.models.scrappers.information_scrapper.requests.get')
-    @patch('src.models.scrappers.information_scrapper.requests.post')
-    def test_collect_places_handles_pagination(
+    @patch('src.models.scrappers.gmaps_scrapper.requests.get')
+    @patch('src.models.scrappers.gmaps_scrapper.requests.post')
+    def test_collect_data_handles_pagination(
         self,
         mock_post,
         mock_get,
@@ -350,7 +350,7 @@ class TestInformationScrapperCollectPlaces:
         mock_text_search_response_with_pagination,
         mock_place_details_response,
     ):
-        """Test that collect_places handles pagination correctly."""
+        """Test that collect_data handles pagination correctly."""
         # First page with nextPageToken
         mock_first_page = Mock()
         mock_first_page.json.return_value = mock_text_search_response_with_pagination
@@ -364,15 +364,15 @@ class TestInformationScrapperCollectPlaces:
         mock_post.side_effect = [mock_first_page, mock_second_page]
         mock_get.return_value = mock_place_details_response
 
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-        scrapper.collect_places(city='SÃO PAULO', state='SP')
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         # Verify multiple API calls were made
         assert mock_post.call_count >= 2
         assert scrapper.ensamble['stats']['text_searches'] >= 1
 
-    @patch('src.models.scrappers.information_scrapper.requests.post')
-    def test_collect_places_deduplicates_by_place_id(
+    @patch('src.models.scrappers.gmaps_scrapper.requests.post')
+    def test_collect_data_deduplicates_by_place_id(
         self, mock_post, valid_api_key, mock_database_handler
     ):
         """Test that duplicate place_ids are filtered out."""
@@ -395,14 +395,14 @@ class TestInformationScrapperCollectPlaces:
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-        scrapper.collect_places(city='SÃO PAULO', state='SP')
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         # Should only collect one place
         assert scrapper.ensamble['stats']['duplicates_by_place_id'] >= 1
 
-    @patch('src.models.scrappers.information_scrapper.requests.post')
-    def test_collect_places_stops_on_quota_exceeded(
+    @patch('src.models.scrappers.gmaps_scrapper.requests.post')
+    def test_collect_data_stops_on_quota_exceeded(
         self,
         mock_post,
         valid_api_key,
@@ -416,34 +416,34 @@ class TestInformationScrapperCollectPlaces:
         mock_post.return_value = mock_response
 
         # Set very low quota limit
-        scrapper = InformationScrapper(
+        scrapper = GMapsScrapper(
             niche='aasi', api_key=valid_api_key, daily_quota_limit=50
         )
-        scrapper.collect_places(city='SÃO PAULO', state='SP')
+        scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         # Should stop due to quota
         assert scrapper.ensamble['status'] == 'partial_quota_exceeded'
         assert 'quota' in scrapper.ensamble['status_reason'].lower()
 
-    def test_collect_places_with_no_search_terms(
+    def test_collect_data_with_no_search_terms(
         self, valid_api_key, mock_database_handler
     ):
-        """Test collect_places when no search terms are available."""
-        scrapper = InformationScrapper(niche='invalid_niche', api_key=valid_api_key)
-        scrapper.collect_places(city='SÃO PAULO', state='SP')
+        """Test collect_data when no search terms are available."""
+        scrapper = GMapsScrapper(niche='invalid_niche', api_key=valid_api_key)
+        scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         assert scrapper.ensamble['status'] == 'failed_no_search_terms'
         assert len(scrapper.ensamble['places']) == 0
 
-    @patch('src.models.scrappers.information_scrapper.requests.get')
-    def test_collect_places_handles_api_errors(
+    @patch('src.models.scrappers.gmaps_scrapper.requests.get')
+    def test_collect_data_handles_api_errors(
         self, mock_requests, valid_api_key, mock_database_handler
     ):
         """Test that API errors are handled gracefully."""
         mock_requests.side_effect = Exception('API Connection Error')
 
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-        scrapper.collect_places(city='SÃO PAULO', state='SP')
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         # Should handle error gracefully
         assert scrapper.ensamble['status'] in [
@@ -452,85 +452,12 @@ class TestInformationScrapperCollectPlaces:
         ]
 
 
-# Tests for collect_details Method
-class TestInformationScrapperCollectDetails:
-    """Tests for the collect_details method."""
-
-    def test_collect_details_with_valid_places(
-        self, valid_api_key, mock_database_handler
-    ):
-        """Test collect_details with places already collected."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-
-        # Manually add places to ensamble
-        scrapper.ensamble['places'] = [
-            {
-                'place_id': 'test-id-1',
-                'name': 'Test Place 1',
-                'city': 'SÃO PAULO',
-                'state': 'SP',
-                'formatted_address': 'Test Address 1',
-                'formatted_phone_number': '(11) 1234-5678',
-            },
-            {
-                'place_id': 'test-id-2',
-                'name': 'Test Place 2',
-                'city': 'SÃO PAULO',
-                'state': 'SP',
-                'formatted_address': 'Test Address 2',
-                'formatted_phone_number': '(11) 8765-4321',
-            },
-        ]
-
-        scrapper.collect_details()
-
-        assert hasattr(scrapper, 'places')
-        assert len(scrapper.places) == 2
-        assert scrapper.places[0]['name'] == 'Test Place 1'
-        assert scrapper.places[0]['phone'] == '(11) 1234-5678'
-        assert scrapper.places[1]['name'] == 'Test Place 2'
-
-    def test_collect_details_raises_error_without_places(
-        self, valid_api_key, mock_database_handler
-    ):
-        """Test that collect_details raises error when no places collected."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-
-        # Remove places from ensamble
-        del scrapper.ensamble['places']
-
-        with pytest.raises(ValueError, match='No places collected'):
-            scrapper.collect_details()
-
-    def test_collect_details_handles_missing_fields(
-        self, valid_api_key, mock_database_handler
-    ):
-        """Test collect_details handles places with missing fields."""
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-
-        # Add place with missing fields
-        scrapper.ensamble['places'] = [
-            {
-                'place_id': 'test-id',
-                'name': 'Incomplete Place',
-                # Missing city, state, address, phone
-            }
-        ]
-
-        scrapper.collect_details()
-
-        assert len(scrapper.places) == 1
-        assert scrapper.places[0]['name'] == 'Incomplete Place'
-        assert scrapper.places[0]['address'] == ''
-        assert scrapper.places[0]['phone'] == ''
-
-
 # Integration-style Tests
-class TestInformationScrapperIntegration:
-    """Integration tests for InformationScrapper with real-like scenarios."""
+class TestGMapsScrapperIntegration:
+    """Integration tests for GMapsScrapper with real-like scenarios."""
 
-    @patch('src.models.scrappers.information_scrapper.requests.get')
-    @patch('src.models.scrappers.information_scrapper.requests.post')
+    @patch('src.models.scrappers.gmaps_scrapper.requests.get')
+    @patch('src.models.scrappers.gmaps_scrapper.requests.post')
     def test_full_collection_workflow(
         self,
         mock_post,
@@ -552,8 +479,8 @@ class TestInformationScrapperIntegration:
         mock_details.raise_for_status.return_value = None
         mock_get.return_value = mock_details
 
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-        scrapper.collect_places(city='SÃO PAULO', state='SP')
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         # Verify complete workflow
         assert len(scrapper.ensamble['places']) > 0
@@ -571,7 +498,7 @@ class TestInformationScrapperIntegration:
                 > 0
             )
 
-    @patch('src.models.scrappers.information_scrapper.requests.post')
+    @patch('src.models.scrappers.gmaps_scrapper.requests.post')
     def test_statistics_tracking(
         self,
         mock_post,
@@ -585,8 +512,8 @@ class TestInformationScrapperIntegration:
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
-        scrapper = InformationScrapper(niche='aasi', api_key=valid_api_key)
-        scrapper.collect_places(city='SÃO PAULO', state='SP')
+        scrapper = GMapsScrapper(niche='aasi', api_key=valid_api_key)
+        scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         stats = scrapper.ensamble['stats']
         assert 'text_searches' in stats

@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 from aws_lambda_powertools import Logger
 
-from src.models.scrappers.information_scrapper import InformationScrapper
+from src.models.scrappers.gmaps_scrapper import GMapsScrapper
 from src.shared.settings import settings
 
 # Configure basic logging
@@ -78,7 +78,7 @@ def data_scrapper(event, context):
 
         # Instantiate appropriate scrapper based on niche
         if niche in valid_niches:
-            scrapper = InformationScrapper(
+            scrapper = GMapsScrapper(
                 niche=niche, api_key=api_key, daily_quota_limit=quota_limit
             )
         else:
@@ -88,7 +88,7 @@ def data_scrapper(event, context):
 
         # Execute place collection
         logger.info(f'Collecting places for {city}, {state}...')
-        scrapper.collect_places(city=city, state=state)
+        scrapper.collect_data(city=city, state=state)
 
         # Check final status
         final_status = scrapper.ensamble.get('status')

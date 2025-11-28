@@ -29,7 +29,7 @@ PLACE_DETAILS_QUOTA_COST = 17  # Place Details Basic
 DUPLICATE_DISTANCE_THRESHOLD_METERS = 50
 
 
-class InformationScrapper(BaseScrapper):
+class GMapsScrapper(BaseScrapper):
     """
     Creates the AASI company web scrapping to collect general information.
     This class collects AASI company places and public information from Google Places API.
@@ -41,7 +41,7 @@ class InformationScrapper(BaseScrapper):
     """
 
     def __init__(self, niche: str, api_key: str, daily_quota_limit: int = 20000):
-        """Initialize the InformationScrapper with niche and API credentials."""
+        """Initialize the GMapsScrapper with niche and API credentials."""
         super().__init__()
         self.niche = niche.lower()
         self.api_key = api_key
@@ -77,7 +77,7 @@ class InformationScrapper(BaseScrapper):
 
         # Log configuration
         logger.info(
-            f'InformationScrapper initialized for niche: {self.niche}, '
+            f'GMapsScrapper initialized for niche: {self.niche}, '
             f'search terms: {len(self.search_terms)}, '
             f'daily quota limit: {self.daily_quota_limit}, '
             f'stage: {settings.stage}, '
@@ -602,7 +602,7 @@ class InformationScrapper(BaseScrapper):
             self.ensamble['status_reason'] = f'Database save failed: {str(e)}'
             return False
 
-    def collect_places(self, city: str, state: str):
+    def collect_data(self, city: str, state: str):
         """
         Collects Google API Places list based on the niche.
         For each niche, there are a configured set of search terms.
@@ -725,21 +725,3 @@ class InformationScrapper(BaseScrapper):
             f'{self.ensamble["status_reason"]}'
         )
 
-    def collect_details(self):
-        """Collects detailed information for each place."""
-        if 'places' not in self.ensamble:
-            raise ValueError('No places collected. Call collect_places first.')
-
-        detailed_places = []
-        for place in self.ensamble['places']:
-            # Placeholder for detailed info collection
-            detailed_info = {
-                'name': place.get('name'),
-                'city': place.get('city'),
-                'state': place.get('state'),
-                'address': place.get('formatted_address', ''),
-                'phone': place.get('formatted_phone_number', ''),
-            }
-            detailed_places.append(detailed_info)
-
-        self.places = detailed_places

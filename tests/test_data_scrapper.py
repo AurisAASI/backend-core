@@ -49,7 +49,7 @@ def valid_sqs_event():
 
 @pytest.fixture
 def mock_scrapper():
-    """Mock InformationScrapper instance."""
+    """Mock GMapsScrapper instance."""
     scrapper = MagicMock()
     scrapper.ensamble = {
         'status': 'completed',
@@ -66,7 +66,7 @@ def mock_scrapper():
             'duplicates_by_location': 0,
         },
     }
-    scrapper.collect_places = MagicMock()
+    scrapper.collect_data = MagicMock()
     return scrapper
 
 
@@ -83,7 +83,7 @@ def mock_context():
 class TestDataScrapperHandler:
     """Tests for the data_scrapper handler function."""
 
-    @patch('src.functions.data_scrapper.handler.InformationScrapper')
+    @patch('src.functions.data_scrapper.handler.GMapsScrapper')
     def test_successful_scraping(
         self,
         mock_scrapper_class,
@@ -102,8 +102,8 @@ class TestDataScrapperHandler:
             niche='aasi', api_key='test-api-key', daily_quota_limit=10000
         )
 
-        # Verify collect_places was called
-        mock_scrapper.collect_places.assert_called_once_with(
+        # Verify collect_data was called
+        mock_scrapper.collect_data.assert_called_once_with(
             city='SÃO PAULO', state='SP'
         )
 
@@ -164,7 +164,7 @@ class TestDataScrapperHandler:
         assert body['success'] is False
         assert 'Missing required fields' in body['details']
 
-    @patch('src.functions.data_scrapper.handler.InformationScrapper')
+    @patch('src.functions.data_scrapper.handler.GMapsScrapper')
     def test_default_niche_when_not_provided(
         self, mock_scrapper_class, mock_context, mock_env_vars, mock_scrapper
     ):
@@ -205,7 +205,7 @@ class TestDataScrapperHandler:
         assert body['success'] is False
         assert 'Unknown niche' in body['details']
 
-    @patch('src.functions.data_scrapper.handler.InformationScrapper')
+    @patch('src.functions.data_scrapper.handler.GMapsScrapper')
     def test_scraping_failed_status(
         self, mock_scrapper_class, valid_sqs_event, mock_context, mock_env_vars
     ):
@@ -227,7 +227,7 @@ class TestDataScrapperHandler:
         assert body['success'] is False
         assert 'Scraping failed' in body['details']
 
-    @patch('src.functions.data_scrapper.handler.InformationScrapper')
+    @patch('src.functions.data_scrapper.handler.GMapsScrapper')
     def test_body_as_dict_instead_of_string(
         self, mock_scrapper_class, mock_context, mock_env_vars, mock_scrapper
     ):
