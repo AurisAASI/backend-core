@@ -103,9 +103,7 @@ class TestDataScrapperHandler:
         )
 
         # Verify collect_data was called
-        mock_scrapper.collect_data.assert_called_once_with(
-            city='SÃO PAULO', state='SP'
-        )
+        mock_scrapper.collect_data.assert_called_once_with(city='SÃO PAULO', state='SP')
 
         # Verify response
         assert result['statusCode'] == 200

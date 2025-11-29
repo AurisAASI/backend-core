@@ -16,9 +16,9 @@ from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import requests
-from aws_lambda_powertools import Logger
 from auris_tools.databaseHandlers import DatabaseHandler
 from auris_tools.geminiHandler import GoogleGeminiHandler
+from aws_lambda_powertools import Logger
 from bs4 import BeautifulSoup
 
 from src.models.scrappers import BaseScrapper
@@ -133,18 +133,22 @@ class WebsiteScrapper(BaseScrapper):
             robots_url = urljoin(base_url, '/robots.txt')
             rp = RobotFileParser()
             rp.set_url(robots_url)
-            
+
             # Read robots.txt - this fetches it from the URL
             try:
                 rp.read()
             except Exception as read_error:
-                logger.warning(f'Could not read robots.txt from {robots_url}: {str(read_error)}')
+                logger.warning(
+                    f'Could not read robots.txt from {robots_url}: {str(read_error)}'
+                )
                 # If we can't read robots.txt, assume it's okay to proceed
                 return True
 
             # Check if our user agent can fetch the base URL
             can_fetch = rp.can_fetch(USER_AGENT, base_url)
-            logger.info(f'robots.txt check for {base_url}: {"allowed" if can_fetch else "disallowed"}')
+            logger.info(
+                f'robots.txt check for {base_url}: {"allowed" if can_fetch else "disallowed"}'
+            )
             return can_fetch
         except Exception as e:
             logger.warning(f'Failed to check robots.txt for {base_url}: {str(e)}')
@@ -154,7 +158,7 @@ class WebsiteScrapper(BaseScrapper):
     def _discover_pages(self, base_url: str) -> List[str]:
         """
         Discover main pages to scrape from the website using hybrid strategy.
-        
+
         Tries multiple strategies in order:
         1. sitemap.xml parsing
         2. Homepage navigation links
@@ -171,13 +175,13 @@ class WebsiteScrapper(BaseScrapper):
         if pages:
             logger.info(f'Discovered {len(pages)} pages from sitemap.xml')
             return pages[:MAX_PAGES_PER_SITE]
-        
+
         # Strategy 2: Try homepage navigation crawl
         pages = self._discover_pages_from_homepage(base_url)
         if pages:
             logger.info(f'Discovered {len(pages)} pages from homepage navigation')
             return pages[:MAX_PAGES_PER_SITE]
-        
+
         # Strategy 3: Fallback to common paths
         logger.info('Using common path fallback strategy')
         return self._discover_pages_common_paths(base_url)
@@ -198,7 +202,7 @@ class WebsiteScrapper(BaseScrapper):
             '/sitemap-index.xml',
             '/sitemap1.xml',
         ]
-        
+
         for sitemap_path in sitemap_paths:
             try:
                 sitemap_url = urljoin(base_url, sitemap_path)
@@ -206,24 +210,26 @@ class WebsiteScrapper(BaseScrapper):
                     sitemap_url,
                     headers={'User-Agent': USER_AGENT},
                     timeout=self.timeout,
-                    verify=True
+                    verify=True,
                 )
-                
+
                 if response.status_code == 200:
                     # Parse XML sitemap
                     soup = BeautifulSoup(response.content, 'xml')
                     urls = [loc.text.strip() for loc in soup.find_all('loc')]
-                    
+
                     if urls:
-                        logger.debug(f'Found sitemap at {sitemap_url} with {len(urls)} URLs')
+                        logger.debug(
+                            f'Found sitemap at {sitemap_url} with {len(urls)} URLs'
+                        )
                         # Filter and prioritize main pages
                         filtered_urls = self._filter_main_pages(urls)
                         return filtered_urls
-                        
+
             except Exception as e:
                 logger.debug(f'Failed to fetch sitemap {sitemap_path}: {str(e)}')
                 continue
-        
+
         return []
 
     def _filter_main_pages(self, urls: List[str]) -> List[str]:
@@ -238,36 +244,56 @@ class WebsiteScrapper(BaseScrapper):
         """
         # Keywords that indicate important pages
         priority_keywords = [
-            'about', 'sobre', 'quem-somos',
-            'contact', 'contato', 'fale-conosco',
-            'service', 'servico', 'servicos',
-            'product', 'produto', 'produtos',
-            'empresa', 'company', 'historia'
+            'about',
+            'sobre',
+            'quem-somos',
+            'contact',
+            'contato',
+            'fale-conosco',
+            'service',
+            'servico',
+            'servicos',
+            'product',
+            'produto',
+            'produtos',
+            'empresa',
+            'company',
+            'historia',
         ]
-        
+
         # Patterns to exclude (blog posts, pagination, etc.)
         exclude_patterns = [
-            r'/blog/', r'/news/', r'/noticia/', r'/artigo/',
-            r'/page/\d+', r'/p/\d+', r'/\d{4}/\d{2}/',
-            r'/category/', r'/tag/', r'/author/',
-            r'\?', r'#'  # Query params and anchors
+            r'/blog/',
+            r'/news/',
+            r'/noticia/',
+            r'/artigo/',
+            r'/page/\d+',
+            r'/p/\d+',
+            r'/\d{4}/\d{2}/',
+            r'/category/',
+            r'/tag/',
+            r'/author/',
+            r'\?',
+            r'#',  # Query params and anchors
         ]
-        
+
         filtered = []
         priority_urls = []
-        
+
         for url in urls:
             # Skip if matches exclude patterns
-            if any(re.search(pattern, url, re.IGNORECASE) for pattern in exclude_patterns):
+            if any(
+                re.search(pattern, url, re.IGNORECASE) for pattern in exclude_patterns
+            ):
                 continue
-            
+
             # Check if it's a priority page
             path = urlparse(url).path.lower()
             if any(kw in path for kw in priority_keywords):
                 priority_urls.append(url)
             else:
                 filtered.append(url)
-        
+
         # Return priority pages first, then others
         return priority_urls + filtered
 
@@ -285,48 +311,52 @@ class WebsiteScrapper(BaseScrapper):
             html = self._fetch_page_content(base_url)
             if not html:
                 return []
-            
+
             soup = BeautifulSoup(html, 'html.parser')
             parsed_base = urlparse(base_url)
             base_domain = f'{parsed_base.scheme}://{parsed_base.netloc}'
-            
+
             # Find links in navigation, header, footer, and main menu areas
             nav_areas = soup.find_all(['nav', 'header', 'footer', 'menu'])
             # Also check for common nav class names
-            nav_areas.extend(soup.find_all(class_=re.compile(r'nav|menu|header', re.IGNORECASE)))
-            
+            nav_areas.extend(
+                soup.find_all(class_=re.compile(r'nav|menu|header', re.IGNORECASE))
+            )
+
             links = set()
-            
+
             for area in nav_areas:
                 for a_tag in area.find_all('a', href=True):
                     href = a_tag['href'].strip()
-                    
+
                     # Skip empty, anchor-only, or javascript links
-                    if not href or href.startswith(('#', 'javascript:', 'mailto:', 'tel:')):
+                    if not href or href.startswith(
+                        ('#', 'javascript:', 'mailto:', 'tel:')
+                    ):
                         continue
-                    
+
                     # Convert relative to absolute URL
                     full_url = urljoin(base_domain, href)
                     parsed_url = urlparse(full_url)
-                    
+
                     # Only include same-domain links
                     if parsed_url.netloc == parsed_base.netloc:
                         # Clean URL (remove anchors and query params for deduplication)
                         clean_url = f'{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}'
                         clean_url = clean_url.rstrip('/')
-                        
+
                         if clean_url and clean_url not in links:
                             links.add(clean_url)
-            
+
             # Convert to list and prioritize
             links_list = list(links)
             if links_list:
                 prioritized = self._prioritize_links(links_list)
                 logger.debug(f'Found {len(prioritized)} navigation links from homepage')
                 return prioritized
-            
+
             return []
-            
+
         except Exception as e:
             logger.warning(f'Failed to crawl homepage navigation: {str(e)}')
             return []
@@ -342,13 +372,22 @@ class WebsiteScrapper(BaseScrapper):
             Sorted list with most relevant URLs first
         """
         priority_keywords = [
-            'sobre', 'about', 'quem-somos',
-            'contato', 'contact', 'fale-conosco',
-            'servico', 'service', 'servicos',
-            'produto', 'product', 'produtos',
-            'empresa', 'company'
+            'sobre',
+            'about',
+            'quem-somos',
+            'contato',
+            'contact',
+            'fale-conosco',
+            'servico',
+            'service',
+            'servicos',
+            'produto',
+            'product',
+            'produtos',
+            'empresa',
+            'company',
         ]
-        
+
         def score_url(url):
             path = urlparse(url).path.lower()
             # Count keyword matches
@@ -356,7 +395,7 @@ class WebsiteScrapper(BaseScrapper):
             # Prefer shorter paths (closer to root)
             depth_penalty = path.count('/') * 0.1
             return matches - depth_penalty
-        
+
         return sorted(links, key=score_url, reverse=True)
 
     def _discover_pages_common_paths(self, base_url: str) -> List[str]:
@@ -494,14 +533,18 @@ class WebsiteScrapper(BaseScrapper):
         Returns:
             Dictionary with extracted structured data
         """
-        logger.info(f'Extracting structured data using Gemini LLM from {len(pages_content)} pages')
+        logger.info(
+            f'Extracting structured data using Gemini LLM from {len(pages_content)} pages'
+        )
 
         # Combine all page texts
         all_text = []
         for url, html in pages_content.items():
             text = self._extract_text_from_html(html)
             if text:
-                all_text.append(f'=== Page: {url} ===\n{text[:20000]}')  # Limit per page
+                all_text.append(
+                    f'=== Page: {url} ===\n{text[:20000]}'
+                )  # Limit per page
 
         combined_text = '\n\n'.join(all_text)[:300000]  # Limit total to ~300k chars
 
@@ -511,8 +554,7 @@ class WebsiteScrapper(BaseScrapper):
 
         # Load JSON schema for Gemini response from external file
         schema_path = os.path.join(
-            os.path.dirname(__file__),
-            'website_gemini_schema.json'
+            os.path.dirname(__file__), 'website_gemini_schema.json'
         )
         try:
             with open(schema_path, 'r', encoding='utf-8') as f:
@@ -574,12 +616,16 @@ Return ONLY valid JSON following the schema provided."""
                 'products_count': len(extracted_data.get('products', [])),
                 'services_count': len(extracted_data.get('services', [])),
                 'brands_count': len(extracted_data.get('brands', [])),
-                'social_links_count': len([v for v in extracted_data.get('social_links', {}).values() if v]),
+                'social_links_count': len(
+                    [v for v in extracted_data.get('social_links', {}).values() if v]
+                ),
                 'has_cnpj': bool(extracted_data.get('cnpj')),
                 'has_offers': bool(extracted_data.get('offers_summary')),
             }
 
-            logger.info(f'Structured data extracted successfully: {self.ensamble["data_extracted"]}')
+            logger.info(
+                f'Structured data extracted successfully: {self.ensamble["data_extracted"]}'
+            )
             return extracted_data
 
         except json.JSONDecodeError as e:
@@ -621,7 +667,9 @@ Return ONLY valid JSON following the schema provided."""
                 update_data=update_data,
             )
 
-            logger.info(f'Successfully saved website data for company {self.company_id}')
+            logger.info(
+                f'Successfully saved website data for company {self.company_id}'
+            )
             return True
 
         except Exception as e:
@@ -641,7 +689,9 @@ Return ONLY valid JSON following the schema provided."""
         4. Extracts structured data using LLM
         5. Saves enriched data to database
         """
-        logger.info(f'Starting website scraping for company {self.company_id}: {self.website}')
+        logger.info(
+            f'Starting website scraping for company {self.company_id}: {self.website}'
+        )
 
         try:
             # Validate URL
@@ -683,7 +733,9 @@ Return ONLY valid JSON following the schema provided."""
             if not pages_content:
                 logger.warning('No pages could be fetched')
                 self.ensamble['status'] = 'partial'
-                self.ensamble['status_reason'] = f'Failed to fetch any pages (tried {len(pages_to_fetch)})'
+                self.ensamble[
+                    'status_reason'
+                ] = f'Failed to fetch any pages (tried {len(pages_to_fetch)})'
                 self._save_to_database({})
                 return
 
@@ -700,10 +752,14 @@ Return ONLY valid JSON following the schema provided."""
                     )
                 else:
                     self.ensamble['status'] = 'completed'
-                    self.ensamble['status_reason'] = f'Successfully scraped {self.ensamble["pages_fetched"]} pages'
+                    self.ensamble[
+                        'status_reason'
+                    ] = f'Successfully scraped {self.ensamble["pages_fetched"]} pages'
             else:
                 self.ensamble['status'] = 'failed'
-                self.ensamble['status_reason'] = 'Failed to extract structured data from pages'
+                self.ensamble[
+                    'status_reason'
+                ] = 'Failed to extract structured data from pages'
 
             # Save to database
             save_success = self._save_to_database(website_data)
@@ -723,7 +779,9 @@ Return ONLY valid JSON following the schema provided."""
             self.ensamble['status_reason'] = f'Invalid URL: {str(e)}'
             self._save_to_database({})
         except Exception as e:
-            logger.error(f'Unexpected error during website scraping: {str(e)}', exc_info=True)
+            logger.error(
+                f'Unexpected error during website scraping: {str(e)}', exc_info=True
+            )
             self.ensamble['status'] = 'failed'
             self.ensamble['status_reason'] = f'Scraping error: {str(e)}'
             self._save_to_database({})

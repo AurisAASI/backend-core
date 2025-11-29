@@ -489,7 +489,9 @@ class GMapsScrapper(BaseScrapper):
         try:
             queue_url = settings.website_scraper_task_queue_url
             if not queue_url:
-                logger.warning('WEBSITE_SCRAPER_TASK_QUEUE_URL not configured, skipping website scraping')
+                logger.warning(
+                    'WEBSITE_SCRAPER_TASK_QUEUE_URL not configured, skipping website scraping'
+                )
                 return
 
             sqs_client = boto3.client('sqs')
@@ -781,4 +783,3 @@ class GMapsScrapper(BaseScrapper):
             f'Final status: {self.ensamble["status"]} - '
             f'{self.ensamble["status_reason"]}'
         )
-
