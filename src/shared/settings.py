@@ -80,6 +80,16 @@ class Settings:
         """Get the scraper task queue name for current stage."""
         return f'backend-core-{self.stage}-scraper-tasks'
 
+    @property
+    def website_scraper_task_queue_url(self) -> str:
+        """Get the website scraper task queue URL."""
+        return os.environ.get('WEBSITE_SCRAPER_TASK_QUEUE_URL', '')
+
+    @property
+    def website_scraper_task_queue_name(self) -> str:
+        """Get the website scraper task queue name for current stage."""
+        return f'backend-core-{self.stage}-website-scraper-tasks'
+
     # Google Places API Configuration
     @property
     def google_places_api_key(self) -> str:
@@ -119,6 +129,23 @@ class Settings:
         }
 
         return default_quotas.get(self.stage, 10000)
+
+    # Google Gemini API Configuration
+    @property
+    def gemini_api_key(self) -> str:
+        """
+        Get the Google Gemini API key for current stage.
+
+        Returns:
+            API key for the current environment (dev or prod)
+        """
+        env_key = f'GEMINI_API_KEY_{self.stage.upper()}'
+        api_key = os.environ.get(env_key, '')
+
+        if not api_key:
+            raise ValueError(f'Missing required environment variable: {env_key}')
+
+        return api_key
 
     # Helper Methods
     def get_resource_name(

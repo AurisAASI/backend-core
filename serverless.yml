@@ -23,6 +23,9 @@ provider:
     GOOGLE_PLACES_API_KEY_PROD: ${env:GOOGLE_PLACES_API_KEY_PROD, ''}
     GOOGLE_PLACES_DAILY_QUOTA_LIMIT_DEV: ${env:GOOGLE_PLACES_DAILY_QUOTA_LIMIT_DEV, '10000'}
     GOOGLE_PLACES_DAILY_QUOTA_LIMIT_PROD: ${env:GOOGLE_PLACES_DAILY_QUOTA_LIMIT_PROD, '20000'}
+    # Google Gemini API configuration (stage-specific)
+    GEMINI_API_KEY_DEV: ${env:GEMINI_API_KEY_DEV, ''}
+    GEMINI_API_KEY_PROD: ${env:GEMINI_API_KEY_PROD, ''}
   apiGateway:
     # Enable API Gateway API keys
     apiKeys:
@@ -115,6 +118,7 @@ functions:
       FUNCTION_NAME: data_scrapper
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
       PLACES_TABLE: ${self:provider.stage}-auris-core-places
+      WEBSITE_SCRAPER_TASK_QUEUE_URL: !Ref WebsiteScraperTaskQueue
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -127,6 +131,40 @@ functions:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places/index/*
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+        Resource: !GetAtt WebsiteScraperTaskQueue.Arn
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+
+  website_scrapper:
+    handler: src/functions/data_scrapper/website_handler.website_scrapper
+    description: Website Scrapper Lambda function that processes website scraping tasks
+    timeout: 300
+    memorySize: 512
+    events:
+      - sqs:
+          arn: !GetAtt WebsiteScraperTaskQueue.Arn
+          batchSize: 1
+    package:
+      patterns:
+        - src/functions/data_scrapper/**
+        - src/shared/**
+        - src/models/**
+    environment:
+      FUNCTION_NAME: website_scrapper
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:Query
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
@@ -213,6 +251,53 @@ resources:
         Dimensions:
           - Name: QueueName
             Value: !GetAtt ScraperTaskDLQ.QueueName
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref ScraperAlarmTopic
+
+    # Website Scraper SQS Queues
+    WebsiteScraperTaskQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-website-scraper-tasks
+        VisibilityTimeout: 360  # 6 minutes (higher than Lambda timeout)
+        MessageRetentionPeriod: 86400  # 1 day
+        ReceiveMessageWaitTimeSeconds: 0
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt WebsiteScraperTaskDLQ.Arn
+          maxReceiveCount: 2  # After 2 failed attempts, move to DLQ
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    WebsiteScraperTaskDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-website-scraper-tasks-dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    WebsiteScraperTaskDLQAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ${self:service}-${self:provider.stage}-website-scraper-dlq-alarm
+        AlarmDescription: Alert when messages are sent to the website scraper DLQ (scraping failures)
+        MetricName: ApproximateNumberOfMessagesVisible
+        Namespace: AWS/SQS
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 1
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt WebsiteScraperTaskDLQ.QueueName
         TreatMissingData: notBreaching
         AlarmActions:
           - !Ref ScraperAlarmTopic

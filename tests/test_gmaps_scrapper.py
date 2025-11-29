@@ -399,7 +399,7 @@ class TestGMapsScrapperCollectPlaces:
         scrapper.collect_data(city='SÃO PAULO', state='SP')
 
         # Should only collect one place
-        assert scrapper.ensamble['stats']['duplicates_by_place_id'] >= 1
+        assert scrapper.ensamble['stats']['duplicates_by_id'] >= 1
 
     @patch('src.models.scrappers.gmaps_scrapper.requests.post')
     def test_collect_data_stops_on_quota_exceeded(
@@ -518,7 +518,7 @@ class TestGMapsScrapperIntegration:
         stats = scrapper.ensamble['stats']
         assert 'text_searches' in stats
         assert 'details_fetched' in stats
-        assert 'duplicates_by_place_id' in stats
+        assert 'duplicates_by_id' in stats
         assert 'duplicates_by_location' in stats
         assert 'new_places' in stats
         assert 'updated_places' in stats

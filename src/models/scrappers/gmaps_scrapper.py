@@ -5,6 +5,7 @@ import time
 import uuid
 from typing import Dict, List, Optional
 
+import boto3
 import requests
 from aws_lambda_powertools import Logger
 
@@ -18,7 +19,7 @@ except ImportError:
     DatabaseHandler = None
 
 # Configure logger
-logger = Logger(service='aasi-scraper')
+logger = Logger(service='gmaps-scraper')
 
 # Google Places API (New) constants
 PLACES_TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
@@ -55,11 +56,12 @@ class GMapsScrapper(BaseScrapper):
             'stats': {
                 'text_searches': 0,
                 'details_fetched': 0,
-                'duplicates_by_place_id': 0,
+                'duplicates_by_id': 0,
                 'duplicates_by_location': 0,
                 'new_places': 0,
                 'updated_places': 0,
                 'skipped_places': 0,
+                'website_tasks_queued': 0,
             },
         }
 
@@ -116,9 +118,9 @@ class GMapsScrapper(BaseScrapper):
         """
         legacy_place = {}
 
-        # Place ID
+        # Place ID - keep as 'id' for consistency
         if 'id' in place:
-            legacy_place['place_id'] = place['id']
+            legacy_place['id'] = place['id']
 
         # Name
         if 'displayName' in place:
@@ -472,6 +474,49 @@ class GMapsScrapper(BaseScrapper):
             )
             return None
 
+    def _queue_website_scraping_task(
+        self, company_id: str, website: str, city: str, state: str
+    ) -> None:
+        """
+        Send SQS message to queue website scraping task.
+
+        Args:
+            company_id: Company UUID
+            website: Company website URL
+            city: City name
+            state: State abbreviation
+        """
+        try:
+            queue_url = settings.website_scraper_task_queue_url
+            if not queue_url:
+                logger.warning('WEBSITE_SCRAPER_TASK_QUEUE_URL not configured, skipping website scraping')
+                return
+
+            sqs_client = boto3.client('sqs')
+            message_body = json.dumps(
+                {
+                    'company_id': company_id,
+                    'website': website,
+                }
+            )
+
+            response = sqs_client.send_message(
+                QueueUrl=queue_url,
+                MessageBody=message_body,
+            )
+
+            self.ensamble['stats']['website_tasks_queued'] += 1
+            logger.info(
+                f'Queued website scraping task for {website} '
+                f'(Company: {company_id}, Message ID: {response["MessageId"]})'
+            )
+
+        except Exception as e:
+            logger.error(
+                f'Failed to queue website scraping task for {company_id}: {str(e)}'
+            )
+            # Don't fail the entire scraping process if SQS fails
+
     def _save_to_database(self, city: str, state: str) -> bool:
         """
         Save collected places to DynamoDB tables.
@@ -492,9 +537,9 @@ class GMapsScrapper(BaseScrapper):
         try:
             for place in self.ensamble['places']:
                 try:
-                    place_id = place.get('place_id')
+                    place_id = place.get('id')
                     if not place_id:
-                        logger.warning('Place missing place_id, skipping')
+                        logger.warning('Place missing id, skipping')
                         continue
 
                     geometry = place.get('geometry', {})
@@ -566,10 +611,12 @@ class GMapsScrapper(BaseScrapper):
                     )
 
                     # Insert place record with companyID link
+                    # Exclude 'id' from place data since we store it as 'placeID'
+                    place_without_id = {k: v for k, v in place.items() if k != 'id'}
                     place_data = {
                         'placeID': place_id,
                         'companyID': company_id,
-                        **place,
+                        **place_without_id,
                     }
 
                     self.db_handler.put_item(
@@ -583,9 +630,19 @@ class GMapsScrapper(BaseScrapper):
                         f'(Place ID: {place_id}, Company ID: {company_id})'
                     )
 
+                    # Queue website scraping task if website is present
+                    website = place.get('website')
+                    if website:
+                        self._queue_website_scraping_task(
+                            company_id=company_id,
+                            website=website,
+                            city=city,
+                            state=state,
+                        )
+
                 except Exception as e:
                     logger.error(
-                        f'Error saving individual place {place.get("place_id")}: {str(e)}'
+                        f'Error saving individual place {place.get("id")}: {str(e)}'
                     )
                     continue
 
@@ -644,13 +701,13 @@ class GMapsScrapper(BaseScrapper):
 
             # Process each result
             for result in text_results:
-                place_id = result.get('place_id')
+                place_id = result.get('id')
                 if not place_id:
                     continue
 
-                # Check for place_id duplicate
+                # Check for id duplicate
                 if place_id in seen_place_ids:
-                    self.ensamble['stats']['duplicates_by_place_id'] += 1
+                    self.ensamble['stats']['duplicates_by_id'] += 1
                     logger.debug(f'Duplicate place_id: {place_id}')
                     continue
 
@@ -703,7 +760,7 @@ class GMapsScrapper(BaseScrapper):
             f'Place collection completed - '
             f'Total places: {len(self.ensamble["places"])}, '
             f'Unique place IDs: {len(seen_place_ids)}, '
-            f'Duplicates (place_id): {self.ensamble["stats"]["duplicates_by_place_id"]}, '
+            f'Duplicates (place_id): {self.ensamble["stats"]["duplicates_by_id"]}, '
             f'Duplicates (location): {self.ensamble["stats"]["duplicates_by_location"]}, '
             f'Quota used: {self.quota_used}/{self.daily_quota_limit}'
         )
