@@ -17,7 +17,7 @@ import pytest
 # Add src directory to the path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from src.functions.data_scrapper.handler import _load_niches, data_scrapper
+from src.functions.data_scrapper.gmaps_handler import _load_niches, gmaps_scrapper
 
 
 # Fixtures
@@ -83,7 +83,7 @@ def mock_context():
 class TestDataScrapperHandler:
     """Tests for the data_scrapper handler function."""
 
-    @patch('src.functions.data_scrapper.handler.GMapsScrapper')
+    @patch('src.functions.data_scrapper.gmaps_handler.GMapsScrapper')
     def test_successful_scraping(
         self,
         mock_scrapper_class,
@@ -95,7 +95,7 @@ class TestDataScrapperHandler:
         """Test successful data scraping with valid SQS event."""
         mock_scrapper_class.return_value = mock_scrapper
 
-        result = data_scrapper(valid_sqs_event, mock_context)
+        result = gmaps_scrapper(valid_sqs_event, mock_context)
 
         # Verify scrapper was instantiated
         mock_scrapper_class.assert_called_once_with(
@@ -119,7 +119,7 @@ class TestDataScrapperHandler:
         """Test error handling when no Records in event."""
         event = {}
 
-        result = data_scrapper(event, mock_context)
+        result = gmaps_scrapper(event, mock_context)
 
         assert result['statusCode'] == 500
         body = json.loads(result['body'])
@@ -137,7 +137,7 @@ class TestDataScrapperHandler:
             ]
         }
 
-        result = data_scrapper(event, mock_context)
+        result = gmaps_scrapper(event, mock_context)
 
         assert result['statusCode'] == 500
         body = json.loads(result['body'])
@@ -155,14 +155,14 @@ class TestDataScrapperHandler:
             ]
         }
 
-        result = data_scrapper(event, mock_context)
+        result = gmaps_scrapper(event, mock_context)
 
         assert result['statusCode'] == 500
         body = json.loads(result['body'])
         assert body['success'] is False
         assert 'Missing required fields' in body['details']
 
-    @patch('src.functions.data_scrapper.handler.GMapsScrapper')
+    @patch('src.functions.data_scrapper.gmaps_handler.GMapsScrapper')
     def test_default_niche_when_not_provided(
         self, mock_scrapper_class, mock_context, mock_env_vars, mock_scrapper
     ):
@@ -177,7 +177,7 @@ class TestDataScrapperHandler:
             ]
         }
 
-        result = data_scrapper(event, mock_context)
+        result = gmaps_scrapper(event, mock_context)
 
         assert result['statusCode'] == 200
         body = json.loads(result['body'])
@@ -196,14 +196,14 @@ class TestDataScrapperHandler:
             ]
         }
 
-        result = data_scrapper(event, mock_context)
+        result = gmaps_scrapper(event, mock_context)
 
         assert result['statusCode'] == 500
         body = json.loads(result['body'])
         assert body['success'] is False
         assert 'Unknown niche' in body['details']
 
-    @patch('src.functions.data_scrapper.handler.GMapsScrapper')
+    @patch('src.functions.data_scrapper.gmaps_handler.GMapsScrapper')
     def test_scraping_failed_status(
         self, mock_scrapper_class, valid_sqs_event, mock_context, mock_env_vars
     ):
@@ -218,14 +218,14 @@ class TestDataScrapperHandler:
         }
         mock_scrapper_class.return_value = failed_scrapper
 
-        result = data_scrapper(valid_sqs_event, mock_context)
+        result = gmaps_scrapper(valid_sqs_event, mock_context)
 
         assert result['statusCode'] == 500
         body = json.loads(result['body'])
         assert body['success'] is False
         assert 'Scraping failed' in body['details']
 
-    @patch('src.functions.data_scrapper.handler.GMapsScrapper')
+    @patch('src.functions.data_scrapper.gmaps_handler.GMapsScrapper')
     def test_body_as_dict_instead_of_string(
         self, mock_scrapper_class, mock_context, mock_env_vars, mock_scrapper
     ):
@@ -240,7 +240,7 @@ class TestDataScrapperHandler:
             ]
         }
 
-        result = data_scrapper(event, mock_context)
+        result = gmaps_scrapper(event, mock_context)
 
         assert result['statusCode'] == 200
         body = json.loads(result['body'])

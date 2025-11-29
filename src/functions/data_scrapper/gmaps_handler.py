@@ -12,7 +12,7 @@ from src.shared.settings import settings
 logger = Logger(service='data-scraper')
 
 
-def data_scrapper(event, context):
+def gmaps_scrapper(event, context):
     """
     Collects information on the web in a determined city/state.
 
