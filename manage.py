@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""
+Management script for local lambda function execution
+"""
+import sys
+import json
+import argparse
+from src.functions import handler, gmaps_handler, website_handler
+
+
+# Available lambda functions
+LAMBDA_FUNCTIONS = {
+    'handler': handler,
+    'gmaps': gmaps_handler,
+    'website': website_handler
+}
+
+
+def execute_lambda(function_name='handler', event_file=None, context_file=None):
+    """
+    Execute the lambda function locally with provided event and context
+    
+    Args:
+        function_name: Name of the lambda function to execute
+        event_file: Path to JSON file containing the event data
+        context_file: Path to JSON file containing the context data (optional)
+    """
+    # Get the selected lambda function
+    if function_name not in LAMBDA_FUNCTIONS:
+        print(f"Error: Unknown function '{function_name}'")
+        print(f"Available functions: {', '.join(LAMBDA_FUNCTIONS.keys())}")
+        sys.exit(1)
+    
+    lambda_handler = LAMBDA_FUNCTIONS[function_name]
+    
+    # Load event data
+    if event_file:
+        with open(event_file, 'r') as f:
+            event = json.load(f)
+    else:
+        event = {}
+    
+    # Create a simple context object
+    class LambdaContext:
+        def __init__(self, context_data=None):
+            context_data = context_data or {}
+            self.function_name = context_data.get('function_name', 'local-function')
+            self.memory_limit_in_mb = context_data.get('memory_limit_in_mb', 128)
+            self.invoked_function_arn = context_data.get('invoked_function_arn', 'local-arn')
+            self.aws_request_id = context_data.get('aws_request_id', 'local-request-id')
+    
+    # Load context data if provided
+    context_data = {}
+    if context_file:
+        with open(context_file, 'r') as f:
+            context_data = json.load(f)
+    
+    context = LambdaContext(context_data)
+    
+    # Execute the lambda handler
+    print(f"Executing lambda function: {function_name}")
+    print(f"Event: {json.dumps(event, indent=2)}")
+    print("-" * 50)
+    
+    try:
+        response = lambda_handler(event, context)
+        print("\nResponse:")
+        print(json.dumps(response, indent=2))
+        return response
+    except Exception as e:
+        print(f"\nError executing lambda: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Execute lambda function locally')
+    parser.add_argument(
+        '-f', '--function',
+        help='Lambda function to execute',
+        choices=list(LAMBDA_FUNCTIONS.keys()),
+        default='handler'
+    )
+    parser.add_argument(
+        '-e', '--event',
+        help='Path to JSON file containing event data',
+        default=None
+    )
+    parser.add_argument(
+        '-c', '--context',
+        help='Path to JSON file containing context data',
+        default=None
+    )
+    
+    args = parser.parse_args()
+    execute_lambda(args.function, args.event, args.context)
