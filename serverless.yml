@@ -100,8 +100,8 @@ functions:
       - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:city_collector_layer:1
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
-  data_scrapper:
-    handler: src/functions/data_scrapper/handler.data_scrapper
+  gmaps_scrapper:
+    handler: src/functions/data_scrapper/gmaps_handler.gmaps_scrapper
     description: Data Scrapper Lambda function that processes scraping tasks
     timeout: 300
     memorySize: 512

@@ -67,7 +67,7 @@ class GMapsScrapper(BaseScrapper):
 
         # Initialize database handler if available
         if DatabaseHandler:
-            self.db_handler = DatabaseHandler()
+            self.db_handler = DatabaseHandler(table_name=settings.places_table_name)
         else:
             self.db_handler = None
             logger.warning(
