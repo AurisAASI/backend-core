@@ -91,6 +91,7 @@ functions:
       # Function specific environment variables
       FUNCTION_NAME: city_collector
       SCRAPER_TASK_QUEUE_URL: !Ref ScraperTaskQueue
+      AWS_REGION_NAME: ${self:provider.region}
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -119,6 +120,7 @@ functions:
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
       PLACES_TABLE: ${self:provider.stage}-auris-core-places
       WEBSITE_SCRAPER_TASK_QUEUE_URL: !Ref WebsiteScraperTaskQueue
+      AWS_REGION_NAME: ${self:provider.region}
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -127,17 +129,21 @@ functions:
           - dynamodb:UpdateItem
           - dynamodb:Scan
           - dynamodb:Query
+          - dynamodb:ListTables
+          - dynamodb:DescribeTable
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places/index/*
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
+          - "arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/*"
       - Effect: Allow
         Action:
           - sqs:SendMessage
         Resource: !GetAtt WebsiteScraperTaskQueue.Arn
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:gmaps_scrapper:2
 
   website_scrapper:
     handler: src/functions/data_scrapper/website_handler.website_scrapper
@@ -156,6 +162,8 @@ functions:
     environment:
       FUNCTION_NAME: website_scrapper
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      COMPANY_FEDERAL_SCRAPER_TASK_QUEUE_URL: !Ref CompanyFederalScraperTaskQueue
+      AWS_REGION_NAME: ${self:provider.region}
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -163,11 +171,54 @@ functions:
           - dynamodb:PutItem
           - dynamodb:UpdateItem
           - dynamodb:Query
+          - dynamodb:ListTables
+          - dynamodb:DescribeTable
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
+          - "arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/*"
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+        Resource: !GetAtt CompanyFederalScraperTaskQueue.Arn
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:website_scrapper:2
+
+  company_federal_scrapper:
+    handler: src/functions/data_scrapper/company_federal_handler.company_federal_scrapper
+    description: Company Federal Scrapper Lambda function that fetches data from OpenCNPJ API
+    timeout: 60
+    memorySize: 256
+    events:
+      - sqs:
+          arn: !GetAtt CompanyFederalScraperTaskQueue.Arn
+          batchSize: 1
+    package:
+      patterns:
+        - src/functions/data_scrapper/**
+        - src/shared/**
+        - src/models/**
+    environment:
+      FUNCTION_NAME: company_federal_scrapper
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:Query
+          - dynamodb:ListTables
+          - dynamodb:DescribeTable
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
+          - "arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/*"
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:company_federal_scrapper:2
 
 plugins:
   - serverless-offline
@@ -298,6 +349,53 @@ resources:
         Dimensions:
           - Name: QueueName
             Value: !GetAtt WebsiteScraperTaskDLQ.QueueName
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref ScraperAlarmTopic
+
+    # Company Federal Scraper SQS Queues
+    CompanyFederalScraperTaskQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-company-federal-scraper-tasks
+        VisibilityTimeout: 90  # 1.5 minutes (higher than Lambda timeout)
+        MessageRetentionPeriod: 86400  # 1 day
+        ReceiveMessageWaitTimeSeconds: 0
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CompanyFederalScraperTaskDLQ.Arn
+          maxReceiveCount: 2  # After 2 failed attempts, move to DLQ
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    CompanyFederalScraperTaskDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-company-federal-scraper-tasks-dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    CompanyFederalScraperTaskDLQAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ${self:service}-${self:provider.stage}-company-federal-scraper-dlq-alarm
+        AlarmDescription: Alert when messages are sent to the company federal scraper DLQ (scraping failures)
+        MetricName: ApproximateNumberOfMessagesVisible
+        Namespace: AWS/SQS
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 1
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt CompanyFederalScraperTaskDLQ.QueueName
         TreatMissingData: notBreaching
         AlarmActions:
           - !Ref ScraperAlarmTopic
