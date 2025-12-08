@@ -67,7 +67,7 @@ class GMapsScrapper(BaseScrapper):
 
         # Initialize database handler if available
         if DatabaseHandler:
-            self.db_handler = DatabaseHandler(table_name=settings.places_table_name)
+            self.db_handler = DatabaseHandler(table_name=settings.get_table_name('places'))
         else:
             self.db_handler = None
             logger.warning(
@@ -494,7 +494,8 @@ class GMapsScrapper(BaseScrapper):
                 )
                 return
 
-            sqs_client = boto3.client('sqs')
+            region = os.environ.get('AWS_REGION_NAME', settings.region)
+            sqs_client = boto3.client('sqs', region_name=region)
             message_body = json.dumps(
                 {
                     'company_id': company_id,
@@ -559,7 +560,6 @@ class GMapsScrapper(BaseScrapper):
                     existing_place = None
                     try:
                         existing_place = self.db_handler.get_item(
-                            table_name=settings.get_table_name('places'),
                             key={'placeID': place_id},
                         )
                     except Exception as e:
@@ -578,7 +578,6 @@ class GMapsScrapper(BaseScrapper):
                         if needs_update:
                             # Update existing place
                             self.db_handler.update_item(
-                                table_name=settings.get_table_name('places'),
                                 key={'placeID': place_id},
                                 update_data=place,
                             )
@@ -607,9 +606,11 @@ class GMapsScrapper(BaseScrapper):
                         'collection_reason': self.ensamble['status_reason'],
                     }
 
-                    self.db_handler.put_item(
-                        table_name=settings.get_table_name('companies'),
+                    # Note: This requires a separate DatabaseHandler instance for companies table
+                    companies_db = DatabaseHandler(table_name=settings.get_table_name('companies'))
+                    companies_db.insert_item(
                         item=company_data,
+                        primary_key='companyID',
                     )
 
                     # Insert place record with companyID link
@@ -622,7 +623,6 @@ class GMapsScrapper(BaseScrapper):
                     }
 
                     self.db_handler.put_item(
-                        table_name=settings.get_table_name('places'),
                         item=place_data,
                     )
 
