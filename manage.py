@@ -5,18 +5,22 @@ Management script for local lambda function execution
 import sys
 import json
 import argparse
-from src.functions import handler, gmaps_handler, website_handler
+from src.functions.city_collector.handler import city_collector
+from src.functions.data_scrapper.gmaps_handler import gmaps_scrapper  
+from src.functions.data_scrapper.website_handler import website_scrapper
+from src.functions.data_scrapper.company_federal_handler import company_federal_scrapper
 
 
 # Available lambda functions
 LAMBDA_FUNCTIONS = {
-    'handler': handler,
-    'gmaps': gmaps_handler,
-    'website': website_handler
+    'city_collector': city_collector,
+    'gmaps': gmaps_scrapper,
+    'website': website_scrapper,
+    'company_federal': company_federal_scrapper,
 }
 
 
-def execute_lambda(function_name='handler', event_file=None, context_file=None):
+def execute_lambda(function_name='city_collector', event_file=None, context_file=None):
     """
     Execute the lambda function locally with provided event and context
     
@@ -80,7 +84,7 @@ if __name__ == "__main__":
         '-f', '--function',
         help='Lambda function to execute',
         choices=list(LAMBDA_FUNCTIONS.keys()),
-        default='handler'
+        default='city_collector'
     )
     parser.add_argument(
         '-e', '--event',
