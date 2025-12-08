@@ -67,7 +67,9 @@ class GMapsScrapper(BaseScrapper):
 
         # Initialize database handler if available
         if DatabaseHandler:
-            self.db_handler = DatabaseHandler(table_name=settings.get_table_name('places'))
+            self.db_handler = DatabaseHandler(
+                table_name=settings.get_table_name('places')
+            )
         else:
             self.db_handler = None
             logger.warning(
@@ -607,7 +609,9 @@ class GMapsScrapper(BaseScrapper):
                     }
 
                     # Note: This requires a separate DatabaseHandler instance for companies table
-                    companies_db = DatabaseHandler(table_name=settings.get_table_name('companies'))
+                    companies_db = DatabaseHandler(
+                        table_name=settings.get_table_name('companies')
+                    )
                     companies_db.insert_item(
                         item=company_data,
                         primary_key='companyID',

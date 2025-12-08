@@ -73,7 +73,9 @@ class WebsiteScrapper(BaseScrapper):
 
         # Initialize database handler
         try:
-            self.db_handler = DatabaseHandler(table_name=settings.get_table_name('companies'))
+            self.db_handler = DatabaseHandler(
+                table_name=settings.get_table_name('companies')
+            )
         except Exception as e:
             logger.warning(f'DatabaseHandler initialization failed: {str(e)}')
             self.db_handler = None
@@ -177,30 +179,30 @@ class WebsiteScrapper(BaseScrapper):
             List of validated page URLs ranked by content size
         """
         logger.info(f'Starting page discovery for {base_url}')
-        
+
         # Step 1: Collect all candidate URLs from all strategies
         candidate_urls = set()
-        
+
         # Strategy 1: Homepage navigation links
         logger.info('Strategy 1: Discovering pages from homepage navigation')
         homepage_pages = self._discover_pages_from_homepage(base_url)
         candidate_urls.update(homepage_pages)
         logger.info(f'Found {len(homepage_pages)} pages from homepage navigation')
-        
+
         # Strategy 2: Sitemap.xml
         logger.info('Strategy 2: Discovering pages from sitemap.xml')
         sitemap_pages = self._discover_pages_from_sitemap(base_url)
         candidate_urls.update(sitemap_pages)
         logger.info(f'Found {len(sitemap_pages)} pages from sitemap')
-        
+
         # Strategy 3: Common paths
         logger.info('Strategy 3: Discovering pages from common paths')
         common_pages = self._discover_pages_common_paths(base_url)
         candidate_urls.update(common_pages)
         logger.info(f'Found {len(common_pages)} pages from common paths')
-        
+
         logger.info(f'Total unique candidate URLs: {len(candidate_urls)}')
-        
+
         # Step 2: Validate URLs and collect content size
         valid_pages = []
         for idx, url in enumerate(candidate_urls):
@@ -208,38 +210,39 @@ class WebsiteScrapper(BaseScrapper):
             if idx > 0 and idx % 5 == 0:
                 delay = random.uniform(0.5, 1.5)
                 time.sleep(delay)
-            
+
             logger.debug(f'Validating URL ({idx + 1}/{len(candidate_urls)}): {url}')
             html_content = self._fetch_page_content(url)
-            
+
             if html_content:
                 content_size = len(html_content)
                 valid_pages.append((url, content_size))
                 logger.debug(f'Valid URL with {content_size} bytes: {url}')
             else:
                 logger.debug(f'Skipping invalid/unreachable URL: {url}')
-        
-        logger.info(f'Validated {len(valid_pages)} accessible pages out of {len(candidate_urls)} candidates')
-        
+
+        logger.info(
+            f'Validated {len(valid_pages)} accessible pages out of {len(candidate_urls)} candidates'
+        )
+
         # Step 3: Rank by content size and select top MAX_PAGES_PER_SITE
         if not valid_pages:
             logger.warning('No valid pages found')
             return []
-        
+
         # Sort by content size (descending) - pages with more content first
         valid_pages.sort(key=lambda x: x[1], reverse=True)
-        
+
         # Select top MAX_PAGES_PER_SITE pages
         selected_pages = [url for url, size in valid_pages[:MAX_PAGES_PER_SITE]]
-        
+
         logger.info(
             f'Selected top {len(selected_pages)} pages by content size '
             f'(range: {valid_pages[-1][1] if len(valid_pages) > 0 else 0} - '
             f'{valid_pages[0][1]} bytes)'
         )
-        
+
         return selected_pages
-        
 
     def _discover_pages_from_sitemap(self, base_url: str) -> List[str]:
         """
@@ -658,10 +661,8 @@ Return ONLY valid JSON following the schema provided."""
                 temperature=0.0,
                 response_mime_type='application/json',
                 response_schema=response_schema,
-                )
-            result = self.gemini_handler.generate_output(
-                prompt=prompt
             )
+            result = self.gemini_handler.generate_output(prompt=prompt)
 
             # Parse JSON response
             extracted_data = json.loads(result.text)
@@ -872,15 +873,19 @@ Return ONLY valid JSON following the schema provided."""
             # Queue federal scraping if CNPJ was extracted
             if website_data and website_data.get('cnpj'):
                 from src.shared.utils import clean_cnpj, validate_cnpj
-                
+
                 extracted_cnpj = website_data.get('cnpj')
                 cleaned_cnpj = clean_cnpj(extracted_cnpj)
-                
+
                 if cleaned_cnpj and validate_cnpj(cleaned_cnpj):
-                    logger.info(f'Valid CNPJ found: {extracted_cnpj}, queueing federal scraping')
+                    logger.info(
+                        f'Valid CNPJ found: {extracted_cnpj}, queueing federal scraping'
+                    )
                     self._queue_federal_scraping_task(self.company_id, cleaned_cnpj)
                 else:
-                    logger.warning(f'Invalid CNPJ extracted: {extracted_cnpj}, skipping federal scraping')
+                    logger.warning(
+                        f'Invalid CNPJ extracted: {extracted_cnpj}, skipping federal scraping'
+                    )
 
             logger.info(
                 f'Website scraping completed - Status: {self.ensamble["status"]}, '

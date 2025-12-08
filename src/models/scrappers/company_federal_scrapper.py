@@ -101,9 +101,9 @@ class CompanyFederalScrapper(BaseScrapper):
                     f'{response.text}'
                 )
                 self.ensamble['status'] = 'failed'
-                self.ensamble['status_reason'] = (
-                    f'API error: HTTP {response.status_code}'
-                )
+                self.ensamble[
+                    'status_reason'
+                ] = f'API error: HTTP {response.status_code}'
                 return None
 
         except requests.exceptions.Timeout:

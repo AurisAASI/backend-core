@@ -90,7 +90,9 @@ def company_federal_scrapper(event, context):
         )
 
         # Execute scraping
-        logger.info(f'Fetching federal data for company {company_id}, CNPJ: {cleaned_cnpj}')
+        logger.info(
+            f'Fetching federal data for company {company_id}, CNPJ: {cleaned_cnpj}'
+        )
         scrapper.collect_data()
 
         # Get final status
@@ -105,7 +107,9 @@ def company_federal_scrapper(event, context):
 
         # Check if scraping failed completely
         if final_status == 'failed' and not data_fetched:
-            logger.warning(f'Complete federal scraping failure for company {company_id}')
+            logger.warning(
+                f'Complete federal scraping failure for company {company_id}'
+            )
             # Still return success to avoid retry - status is saved in DB
             return {
                 'statusCode': 200,
