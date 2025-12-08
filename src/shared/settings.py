@@ -90,6 +90,16 @@ class Settings:
         """Get the website scraper task queue name for current stage."""
         return f'backend-core-{self.stage}-website-scraper-tasks'
 
+    @property
+    def company_federal_scraper_task_queue_url(self) -> str:
+        """Get the company federal scraper task queue URL."""
+        return os.environ.get('COMPANY_FEDERAL_SCRAPER_TASK_QUEUE_URL', '')
+
+    @property
+    def company_federal_scraper_task_queue_name(self) -> str:
+        """Get the company federal scraper task queue name for current stage."""
+        return f'backend-core-{self.stage}-company-federal-scraper-tasks'
+
     # Google Places API Configuration
     @property
     def google_places_api_key(self) -> str:
