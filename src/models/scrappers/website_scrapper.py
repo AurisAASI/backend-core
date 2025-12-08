@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
+import boto3
 import requests
 from auris_tools.databaseHandlers import DatabaseHandler
 from auris_tools.geminiHandler import GoogleGeminiHandler
@@ -28,7 +29,7 @@ from src.shared.settings import settings
 logger = Logger(service='website-scraper')
 
 # Constants
-MAX_PAGES_PER_SITE = 7
+MAX_PAGES_PER_SITE = 15
 REQUEST_TIMEOUT = 10
 USER_AGENT = 'AurisBot/1.0 (+https://auris.com.br/bot)'
 MIN_DELAY_SECONDS = 2
@@ -72,7 +73,7 @@ class WebsiteScrapper(BaseScrapper):
 
         # Initialize database handler
         try:
-            self.db_handler = DatabaseHandler()
+            self.db_handler = DatabaseHandler(table_name=settings.get_table_name('companies'))
         except Exception as e:
             logger.warning(f'DatabaseHandler initialization failed: {str(e)}')
             self.db_handler = None
@@ -159,32 +160,86 @@ class WebsiteScrapper(BaseScrapper):
         """
         Discover main pages to scrape from the website using hybrid strategy.
 
-        Tries multiple strategies in order:
-        1. sitemap.xml parsing
-        2. Homepage navigation links
-        3. Common path fallback
+        This method:
+        1. Collects all available page URLs from multiple strategies
+        2. Validates that each URL is actually accessible
+        3. Ranks pages by HTML content size and selects top MAX_PAGES_PER_SITE
+
+        Strategies used:
+        - Homepage navigation links
+        - Sitemap.xml parsing
+        - Common path patterns
 
         Args:
             base_url: Base URL of the website
 
         Returns:
-            List of page URLs to scrape
+            List of validated page URLs ranked by content size
         """
-        # Strategy 1: Try sitemap.xml
-        pages = self._discover_pages_from_sitemap(base_url)
-        if pages:
-            logger.info(f'Discovered {len(pages)} pages from sitemap.xml')
-            return pages[:MAX_PAGES_PER_SITE]
-
-        # Strategy 2: Try homepage navigation crawl
-        pages = self._discover_pages_from_homepage(base_url)
-        if pages:
-            logger.info(f'Discovered {len(pages)} pages from homepage navigation')
-            return pages[:MAX_PAGES_PER_SITE]
-
-        # Strategy 3: Fallback to common paths
-        logger.info('Using common path fallback strategy')
-        return self._discover_pages_common_paths(base_url)
+        logger.info(f'Starting page discovery for {base_url}')
+        
+        # Step 1: Collect all candidate URLs from all strategies
+        candidate_urls = set()
+        
+        # Strategy 1: Homepage navigation links
+        logger.info('Strategy 1: Discovering pages from homepage navigation')
+        homepage_pages = self._discover_pages_from_homepage(base_url)
+        candidate_urls.update(homepage_pages)
+        logger.info(f'Found {len(homepage_pages)} pages from homepage navigation')
+        
+        # Strategy 2: Sitemap.xml
+        logger.info('Strategy 2: Discovering pages from sitemap.xml')
+        sitemap_pages = self._discover_pages_from_sitemap(base_url)
+        candidate_urls.update(sitemap_pages)
+        logger.info(f'Found {len(sitemap_pages)} pages from sitemap')
+        
+        # Strategy 3: Common paths
+        logger.info('Strategy 3: Discovering pages from common paths')
+        common_pages = self._discover_pages_common_paths(base_url)
+        candidate_urls.update(common_pages)
+        logger.info(f'Found {len(common_pages)} pages from common paths')
+        
+        logger.info(f'Total unique candidate URLs: {len(candidate_urls)}')
+        
+        # Step 2: Validate URLs and collect content size
+        valid_pages = []
+        for idx, url in enumerate(candidate_urls):
+            # Rate limiting between validation requests
+            if idx > 0 and idx % 5 == 0:
+                delay = random.uniform(0.5, 1.5)
+                time.sleep(delay)
+            
+            logger.debug(f'Validating URL ({idx + 1}/{len(candidate_urls)}): {url}')
+            html_content = self._fetch_page_content(url)
+            
+            if html_content:
+                content_size = len(html_content)
+                valid_pages.append((url, content_size))
+                logger.debug(f'Valid URL with {content_size} bytes: {url}')
+            else:
+                logger.debug(f'Skipping invalid/unreachable URL: {url}')
+        
+        logger.info(f'Validated {len(valid_pages)} accessible pages out of {len(candidate_urls)} candidates')
+        
+        # Step 3: Rank by content size and select top MAX_PAGES_PER_SITE
+        if not valid_pages:
+            logger.warning('No valid pages found')
+            return []
+        
+        # Sort by content size (descending) - pages with more content first
+        valid_pages.sort(key=lambda x: x[1], reverse=True)
+        
+        # Select top MAX_PAGES_PER_SITE pages
+        selected_pages = [url for url, size in valid_pages[:MAX_PAGES_PER_SITE]]
+        
+        logger.info(
+            f'Selected top {len(selected_pages)} pages by content size '
+            f'(range: {valid_pages[-1][1] if len(valid_pages) > 0 else 0} - '
+            f'{valid_pages[0][1]} bytes)'
+        )
+        
+        return selected_pages
+        
 
     def _discover_pages_from_sitemap(self, base_url: str) -> List[str]:
         """
@@ -598,14 +653,18 @@ Return ONLY valid JSON following the schema provided."""
         try:
             # Use Gemini to extract structured data with JSON schema
             logger.info('Calling Gemini API for structured extraction...')
-            result = self.gemini_handler.generate_content(
-                prompt=prompt,
+            self.gemini_handler = GoogleGeminiHandler(
+                api_key=self.gemini_api_key,
+                temperature=0.0,
                 response_mime_type='application/json',
                 response_schema=response_schema,
+                )
+            result = self.gemini_handler.generate_output(
+                prompt=prompt
             )
 
             # Parse JSON response
-            extracted_data = json.loads(result)
+            extracted_data = json.loads(result.text)
 
             # Log extraction stats
             self.ensamble['data_extracted'] = {
@@ -662,9 +721,9 @@ Return ONLY valid JSON following the schema provided."""
 
             # Update company record
             self.db_handler.update_item(
-                table_name=settings.companies_table_name,
                 key={'companyID': self.company_id},
-                update_data=update_data,
+                updates=update_data,
+                primary_key='companyID',
             )
 
             logger.info(
@@ -677,6 +736,48 @@ Return ONLY valid JSON following the schema provided."""
             self.ensamble['status'] = 'failed'
             self.ensamble['status_reason'] = f'Database save failed: {str(e)}'
             return False
+
+    def _queue_federal_scraping_task(self, company_id: str, cnpj: str) -> None:
+        """
+        Send SQS message to queue federal company data scraping task.
+
+        Args:
+            company_id: Company UUID
+            cnpj: Clean CNPJ number (digits only)
+        """
+        try:
+            queue_url = settings.company_federal_scraper_task_queue_url
+            if not queue_url:
+                logger.warning(
+                    'COMPANY_FEDERAL_SCRAPER_TASK_QUEUE_URL not configured, '
+                    'skipping federal scraping'
+                )
+                return
+
+            region = os.environ.get('AWS_REGION_NAME', settings.region)
+            sqs_client = boto3.client('sqs', region_name=region)
+            message_body = json.dumps(
+                {
+                    'company_id': company_id,
+                    'cnpj': cnpj,
+                }
+            )
+
+            response = sqs_client.send_message(
+                QueueUrl=queue_url,
+                MessageBody=message_body,
+            )
+
+            logger.info(
+                f'Queued federal scraping task for CNPJ {cnpj} '
+                f'(Company: {company_id}, Message ID: {response["MessageId"]})'
+            )
+
+        except Exception as e:
+            logger.error(
+                f'Failed to queue federal scraping task for {company_id}: {str(e)}'
+            )
+            # Don't fail the entire scraping process if SQS fails
 
     def collect_data(self) -> None:
         """
@@ -767,6 +868,19 @@ Return ONLY valid JSON following the schema provided."""
             if not save_success:
                 # Status already updated in _save_to_database
                 pass
+
+            # Queue federal scraping if CNPJ was extracted
+            if website_data and website_data.get('cnpj'):
+                from src.shared.utils import clean_cnpj, validate_cnpj
+                
+                extracted_cnpj = website_data.get('cnpj')
+                cleaned_cnpj = clean_cnpj(extracted_cnpj)
+                
+                if cleaned_cnpj and validate_cnpj(cleaned_cnpj):
+                    logger.info(f'Valid CNPJ found: {extracted_cnpj}, queueing federal scraping')
+                    self._queue_federal_scraping_task(self.company_id, cleaned_cnpj)
+                else:
+                    logger.warning(f'Invalid CNPJ extracted: {extracted_cnpj}, skipping federal scraping')
 
             logger.info(
                 f'Website scraping completed - Status: {self.ensamble["status"]}, '
