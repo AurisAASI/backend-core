@@ -59,7 +59,8 @@ def city_collector(event, context):
         )
 
         # Step 2: Queue scraping task for the city/state
-        sqs_client = boto3.client('sqs')
+        region = os.environ.get('AWS_REGION_NAME', settings.region)
+        sqs_client = boto3.client('sqs', region_name=region)
         sqs_response = sqs_client.send_message(
             QueueUrl=os.environ.get('SCRAPER_TASK_QUEUE_URL'),
             MessageBody=json.dumps(
