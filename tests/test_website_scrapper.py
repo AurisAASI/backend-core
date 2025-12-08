@@ -540,6 +540,7 @@ class TestTextExtraction:
 class TestStructuredDataExtraction:
     """Tests for LLM-powered data extraction."""
 
+    @patch('src.models.scrappers.website_scrapper.GoogleGeminiHandler')
     @patch(
         'builtins.open',
         new_callable=mock_open,
@@ -548,9 +549,9 @@ class TestStructuredDataExtraction:
     def test_extract_structured_data_success(
         self,
         mock_file,
+        mock_gemini_class,
         mock_settings,
         mock_db_handler,
-        mock_gemini_handler,
         sample_html_about,
         sample_gemini_response,
     ):
@@ -561,10 +562,12 @@ class TestStructuredDataExtraction:
             gemini_api_key='test-key',
         )
 
-        # Mock Gemini response
-        mock_gemini_handler.generate_content.return_value = json.dumps(
-            sample_gemini_response
-        )
+        # Mock Gemini handler to return proper result object
+        mock_gemini_instance = MagicMock()
+        mock_result = Mock()
+        mock_result.text = json.dumps(sample_gemini_response)
+        mock_gemini_instance.generate_output.return_value = mock_result
+        mock_gemini_class.return_value = mock_gemini_instance
 
         pages_content = {'https://audicare.com.br/sobre': sample_html_about}
 
@@ -646,11 +649,12 @@ class TestDatabaseOperations:
 
         # Verify call arguments
         call_args = mock_db_handler.update_item.call_args
-        assert call_args[1]['table_name'] == 'dev-auris-core-companies'
         assert call_args[1]['key'] == {'companyID': 'test-uuid-123'}
-        assert 'website_data' in call_args[1]['update_data']
-        assert 'website_scraping_status' in call_args[1]['update_data']
-        assert call_args[1]['update_data']['website_scraping_status'] == 'completed'
+        assert call_args[1]['primary_key'] == 'companyID'
+        assert 'website_data' in call_args[1]['updates']
+        assert 'website_scraping_status' in call_args[1]['updates']
+        assert call_args[1]['updates']['website_scraping_status'] == 'completed'
+        assert call_args[1]['updates']['website_data'] == sample_gemini_response
 
     def test_save_to_database_no_handler(self, mock_settings, mock_gemini_handler):
         """Test save fails gracefully when DB handler unavailable."""
@@ -691,6 +695,7 @@ class TestDatabaseOperations:
 class TestCollectDataWorkflow:
     """Tests for complete data collection workflow."""
 
+    @patch('src.models.scrappers.website_scrapper.GoogleGeminiHandler')
     @patch('src.models.scrappers.website_scrapper.time.sleep')
     @patch('src.models.scrappers.website_scrapper.requests.get')
     @patch(
@@ -703,9 +708,9 @@ class TestCollectDataWorkflow:
         mock_file,
         mock_get,
         mock_sleep,
+        mock_gemini_class,
         mock_settings,
         mock_db_handler,
-        mock_gemini_handler,
         sample_html_homepage,
         sample_html_about,
         sample_gemini_response,
@@ -726,10 +731,12 @@ class TestCollectDataWorkflow:
 
         mock_get.side_effect = get_side_effect
 
-        # Mock Gemini response
-        mock_gemini_handler.generate_content.return_value = json.dumps(
-            sample_gemini_response
-        )
+        # Mock Gemini handler to return proper result object
+        mock_gemini_instance = MagicMock()
+        mock_result = Mock()
+        mock_result.text = json.dumps(sample_gemini_response)
+        mock_gemini_instance.generate_output.return_value = mock_result
+        mock_gemini_class.return_value = mock_gemini_instance
 
         scrapper = WebsiteScrapper(
             company_id='test-uuid-123',
