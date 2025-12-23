@@ -40,6 +40,16 @@ class CompanyFederalScrapper(BaseScrapper):
     def __init__(self, company_id: str, cnpj: str):
         """Initialize the CompanyFederalScrapper."""
         super().__init__()
+
+        # Set up default boto3 session with explicit region
+        import os
+
+        import boto3
+
+        region = os.environ.get('AWS_REGION_NAME', settings.region)
+        boto3.setup_default_session(region_name=region)
+        logger.info(f'boto3 default session configured for region: {region}')
+
         self.company_id = company_id
         self.cnpj = cnpj
         self.ensamble = {
@@ -51,6 +61,9 @@ class CompanyFederalScrapper(BaseScrapper):
         # Initialize database handler
         try:
             self.db_handler = DatabaseHandler(table_name=settings.companies_table_name)
+            logger.info(
+                f'Database handler initialized for table: {settings.companies_table_name}'
+            )
         except Exception as e:
             logger.warning(f'DatabaseHandler initialization failed: {str(e)}')
             self.db_handler = None

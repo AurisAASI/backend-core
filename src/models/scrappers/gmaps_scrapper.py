@@ -30,6 +30,15 @@ PLACE_DETAILS_QUOTA_COST = 17  # Place Details Basic
 DUPLICATE_DISTANCE_THRESHOLD_METERS = 50
 
 
+# TODO TEM UM ERRO QUANDO O DATABASEHANDLER INICIA (NAO ACHA A TABELA
+# {
+#     "level": "ERROR",
+#     "location": "__init__:82",
+#     "message": "Failed to initialize database handler: Table does not exist: dev-auris-core-places",
+#     "timestamp": "2025-12-08 17:05:19,895+0000",
+#     "service": "gmaps-scraper",
+#     "xray_trace_id": "1-6937054d-96d534c6ba4bf94bc8b44c60"
+# }
 class GMapsScrapper(BaseScrapper):
     """
     Creates the AASI company web scrapping to collect general information.
@@ -44,6 +53,12 @@ class GMapsScrapper(BaseScrapper):
     def __init__(self, niche: str, api_key: str, daily_quota_limit: int = 20000):
         """Initialize the GMapsScrapper with niche and API credentials."""
         super().__init__()
+
+        # Set up default boto3 session with explicit region
+        region = os.environ.get('AWS_REGION_NAME', settings.region)
+        boto3.setup_default_session(region_name=region)
+        logger.info(f'boto3 default session configured for region: {region}')
+
         self.niche = niche.lower()
         self.api_key = api_key
         self.daily_quota_limit = daily_quota_limit
@@ -67,9 +82,16 @@ class GMapsScrapper(BaseScrapper):
 
         # Initialize database handler if available
         if DatabaseHandler:
-            self.db_handler = DatabaseHandler(
-                table_name=settings.get_table_name('places')
-            )
+            try:
+                self.db_handler = DatabaseHandler(
+                    table_name=settings.get_table_name('places')
+                )
+                logger.info(
+                    f'Database handler initialized for table: {settings.get_table_name("places")}'
+                )
+            except Exception as e:
+                logger.error(f'Failed to initialize database handler: {str(e)}')
+                self.db_handler = None
         else:
             self.db_handler = None
             logger.warning(

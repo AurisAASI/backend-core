@@ -59,6 +59,12 @@ class WebsiteScrapper(BaseScrapper):
     ):
         """Initialize the WebsiteScrapper."""
         super().__init__()
+
+        # Set up default boto3 session with explicit region
+        region = os.environ.get('AWS_REGION_NAME', settings.region)
+        boto3.setup_default_session(region_name=region)
+        logger.info(f'boto3 default session configured for region: {region}')
+
         self.company_id = company_id
         self.website = self._normalize_url(website)
         self.gemini_api_key = gemini_api_key
@@ -75,6 +81,9 @@ class WebsiteScrapper(BaseScrapper):
         try:
             self.db_handler = DatabaseHandler(
                 table_name=settings.get_table_name('companies')
+            )
+            logger.info(
+                f'Database handler initialized for table: {settings.get_table_name("companies")}'
             )
         except Exception as e:
             logger.warning(f'DatabaseHandler initialization failed: {str(e)}')
