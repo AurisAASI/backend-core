@@ -1,0 +1,19 @@
+{
+    "leadId": "",
+    "companyID": "",
+    "assignedUser": "",
+    "fullName": "",
+    "phone": "",
+    "email": "",
+    "city": "",
+    "allowsMarketing": true,
+    "entryDate": "",
+    "statusLead": "",
+    "statusClassification": "",
+    "source": "",
+    "audiologist": "",
+    "reminderDate": "",
+    "communicationHistoryIds": [],
+    "createdAt": "",
+    "updatedAt": ""
+}

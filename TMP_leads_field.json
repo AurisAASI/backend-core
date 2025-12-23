@@ -1,0 +1,175 @@
+
+
+{
+  "tableName": "<stage>-auris-core-leads",
+  "description": "DynamoDB schema for Auris CRM Lead Management System",
+  "partitionKey": {
+    "name": "leadId",
+    "type": "String",
+    "description": "Unique identifier for the lead (primary key)"
+  },
+  "sortKey": null,
+  "attributes": {
+    "leadId": {
+      "type": "String",
+      "required": true,
+      "description": "Unique identifier (e.g., LEAD001, LEAD002)"
+    },
+    "fullName": {
+      "type": "String",
+      "required": true,
+      "description": "Full name of the lead"
+    },
+    "phone": {
+      "type": "String",
+      "required": true,
+      "description": "Phone/WhatsApp number in Brazilian format with +55 prefix",
+      "pattern": "^\\+55\\d{10,11}$"
+    },
+    "email": {
+      "type": "String",
+      "required": false,
+      "description": "Email address - validated format"
+    },
+    "city": {
+      "type": "String",
+      "required": true,
+      "description": "City name from SP cities reference"
+    },
+    "allowsMarketing": {
+      "type": "Boolean",
+      "required": true,
+      "default": true,
+      "description": "Marketing permission toggle"
+    },
+    "entryDate": {
+      "type": "String",
+      "required": true,
+      "description": "Lead entry date in ISO 8601 format (YYYY-MM-DD)",
+      "format": "ISO8601"
+    },
+    "statusLead": {
+      "type": "String",
+      "required": true,
+      "description": "Current lead status",
+      "enum": [
+        "Aguardando contato",
+        "Contato com problema",
+        "Sem retorno",
+        "Em conversa com lead",
+        "Declinou",
+        "Agendamento realizado",
+        "Não compareceu",
+        "Compareceu, em teste",
+        "Compareceu, orçamento",
+        "Compareceu, devolução",
+        "Compareceu, vendido",
+        "Acompanhamento",
+        "Arquivo"
+      ]
+    },
+    "statusClassification": {
+      "type": "String",
+      "required": false,
+      "description": "Status classification that informs the lead's decision on the hearing aid purchase",
+    },
+    "source": {
+      "type": "String",
+      "required": true,
+      "description": "Lead source/origin",
+      "enum": [
+        "Mkt Murashima",
+        "Mkt AASI",
+        "Mkt ACSF TI",
+        "Demant",
+        "Auditik Orgânico",
+        "Auditik Site",
+        "Indicação Médica",
+        "Indicação Paciente",
+        "Parceiros/Associações",
+        "Jornais, TV, Rádio",
+        "Passante, Panfletagem",
+        "Outro"
+      ]
+    },
+    "audiologist": {
+      "type": "String",
+      "required": false,
+      "description": "Responsible audiologist name from audiologists reference. Only required when lead status is 'Agendado' or further along."
+    },
+    "assignedUser": {
+      "type": "String",
+      "required": false,
+      "description": "User ID managing this lead"
+    },
+    "communicationObservation": {
+      "type": "String",
+      "required": false,
+      "description": "General communication observation notes"
+    },
+    "reminderDate": {
+      "type": "String",
+      "required": false,
+      "description": "Reminder date in DD/MM/YYYY format",
+      "pattern": "^\\d{2}/\\d{2}/\\d{4}$"
+    },
+    "communicationHistoryIds": {
+      "type": "List",
+      "itemType": "String",
+      "required": false,
+      "description": "List of communication IDs referencing communication history table"
+    },
+    "createdAt": {
+      "type": "String",
+      "required": true,
+      "description": "Timestamp when record was created (ISO 8601)",
+      "format": "ISO8601"
+    },
+    "updatedAt": {
+      "type": "String",
+      "required": true,
+      "description": "Timestamp when record was last updated (ISO 8601)",
+      "format": "ISO8601"
+    }
+  },
+  "globalSecondaryIndexes": [
+    {
+      "indexName": "statusLead-dataEntrada-index",
+      "partitionKey": "statusLead",
+      "sortKey": "dataEntrada",
+      "description": "Query leads by status and entry date"
+    },
+    {
+      "indexName": "usuarioAtribuido-dataLembrete-index",
+      "partitionKey": "usuarioAtribuido",
+      "sortKey": "dataLembrete",
+      "description": "Query leads by assigned user and reminder date"
+    },
+    {
+      "indexName": "fonteOrigem-dataEntrada-index",
+      "partitionKey": "fonteOrigem",
+      "sortKey": "dataEntrada",
+      "description": "Query leads by source and entry date"
+    }
+  ],
+  "relatedTables": {
+    "communicationHistory": {
+      "tableName": "dev-auris-core-communication-history",
+      "relationship": "one-to-many",
+      "description": "Communication history records linked via communicationHistoryIds"
+    },
+    "companies": {
+      "tableName": "dev-auris-core-companies",
+      "relationship": "many-to-one",
+      "description": "Company user that is managing the lead via assignedUser"
+    }
+  },
+  "notes": [
+    "DynamoDB does not enforce schema, this is a reference structure",
+    "Partition key: leadId provides unique access pattern",
+    "GSIs enable filtering by status, user assignment, and source",
+    "Communication history stored in separate table to avoid item size limits",
+    "Calculated fields (tempoEntrada, ultimaComunicacao) computed in application layer",
+    "Date formats: ISO 8601 for storage, DD/MM/YYYY for user display only"
+  ]
+}

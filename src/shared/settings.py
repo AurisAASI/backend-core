@@ -47,12 +47,22 @@ class Settings:
         """Get the places DynamoDB table name for current stage."""
         return os.environ.get('PLACES_TABLE', f'{self.stage}-auris-core-places')
 
-    def get_table_name(self, table_type: Literal['companies', 'places']) -> str:
+    @property
+    def leads_table_name(self) -> str:
+        """Get the leads DynamoDB table name for current stage."""
+        return os.environ.get('LEADS_TABLE', f'{self.stage}-auris-core-leads')
+
+    @property
+    def communication_history_table_name(self) -> str:
+        """Get the communication history DynamoDB table name for current stage."""
+        return os.environ.get('COMMUNICATION_HISTORY_TABLE', f'{self.stage}-auris-core-communication-history')
+
+    def get_table_name(self, table_type: Literal['companies', 'places', 'leads', 'leads']) -> str:
         """
         Get DynamoDB table name by type.
 
         Args:
-            table_type: Type of table ('companies' or 'places')
+            table_type: Type of table ('companies', 'places', or 'leads')
 
         Returns:
             Full table name with stage prefix
@@ -64,9 +74,11 @@ class Settings:
             return self.companies_table_name
         elif table_type == 'places':
             return self.places_table_name
+        elif table_type == 'leads':
+            return self.leads_table_name
         else:
             raise ValueError(
-                f"Invalid table_type: '{table_type}'. Must be 'companies' or 'places'"
+                f"Invalid table_type: '{table_type}'. Must be 'companies', 'places', or 'leads'"
             )
 
     # SQS Queue Configuration

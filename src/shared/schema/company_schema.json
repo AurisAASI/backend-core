@@ -1,0 +1,18 @@
+{
+    "companyID": "",
+    "users": {},
+    "name": "",
+    "city": "",
+    "state": "",
+    "niche": "",
+    "collection_status": "",
+    "collection_reason": "",
+    "federal_data": {},
+    "federal_scraping_status": "",
+    "federal_scraping_reason": "",
+    "federal_scraped_at": "",
+    "website_data": {},
+    "website_scraping_status": "",
+    "website_scraping_reason": "",
+    "website_scraped_at": ""
+}

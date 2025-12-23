@@ -220,6 +220,40 @@ functions:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
       - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:company_federal_scrapper:2
 
+  gl_add_new_lead:
+    handler: src/functions/gl_add_new_lead/add_new_lead_handler.add_new_lead
+    description: HTTP endpoint for creating new leads in the CRM system
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: leads
+          method: post
+          cors: true
+          private: true  # Require API key
+    package:
+      patterns:
+        - src/functions/gl_add_new_lead/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: gl_add_new_lead
+      LEADS_TABLE: ${self:provider.stage}-auris-core-leads
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:Query
+          - dynamodb:DescribeTable
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-leads
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-leads/index/*
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+
 plugins:
   - serverless-offline
   - serverless-add-api-key

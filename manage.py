@@ -9,6 +9,7 @@ from src.functions.city_collector.handler import city_collector
 from src.functions.data_scrapper.gmaps_handler import gmaps_scrapper  
 from src.functions.data_scrapper.website_handler import website_scrapper
 from src.functions.data_scrapper.company_federal_handler import company_federal_scrapper
+from src.functions.gl_add_new_lead.add_new_lead_handler import add_new_lead
 
 
 # Available lambda functions
@@ -17,6 +18,7 @@ LAMBDA_FUNCTIONS = {
     'gmaps': gmaps_scrapper,
     'website': website_scrapper,
     'company_federal': company_federal_scrapper,
+    'add_new_lead': add_new_lead,
 }
 
 

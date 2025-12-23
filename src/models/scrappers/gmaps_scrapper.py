@@ -3,6 +3,7 @@ import math
 import os
 import time
 import uuid
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import boto3
@@ -20,6 +21,11 @@ except ImportError:
 
 # Configure logger
 logger = Logger(service='gmaps-scraper')
+
+# Load company schema template
+COMPANY_SCHEMA_PATH = Path(__file__).parent.parent.parent / 'shared' / 'schema' / 'company_schema.json'
+with open(COMPANY_SCHEMA_PATH, 'r') as f:
+    COMPANY_SCHEMA = json.load(f)
 
 # Google Places API (New) constants
 PLACES_TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
@@ -619,16 +625,19 @@ class GMapsScrapper(BaseScrapper):
                     # New place - generate company ID and insert
                     company_id = str(uuid.uuid4())
 
-                    # Insert company record
-                    company_data = {
-                        'companyID': company_id,
-                        'name': place.get('name'),
-                        'city': city,
-                        'state': state,
-                        'niche': self.niche,
-                        'collection_status': self.ensamble['status'],
-                        'collection_reason': self.ensamble['status_reason'],
-                    }
+                    # Build company data using schema template
+                    company_data = COMPANY_SCHEMA.copy()
+                    company_data['companyID'] = company_id
+                    company_data['users'] = []
+                    company_data['name'] = place.get('name')
+                    company_data['city'] = city
+                    company_data['state'] = state
+                    company_data['niche'] = self.niche
+                    company_data['collection_status'] = self.ensamble['status']
+                    company_data['collection_reason'] = self.ensamble['status_reason']
+                    
+                    # Remove empty strings
+                    company_data = {k: v for k, v in company_data.items() if v != ""}
 
                     # Note: This requires a separate DatabaseHandler instance for companies table
                     companies_db = DatabaseHandler(

@@ -3,6 +3,10 @@ import re
 from http import HTTPStatus
 from typing import Any, Dict, Optional, Union
 
+from auris_tools.databaseHandlers import DatabaseHandler
+
+from src.shared.settings import settings
+
 
 def validate_cnpj(cnpj: str) -> bool:
     """
@@ -72,6 +76,30 @@ def clean_cnpj(cnpj: str) -> Optional[str]:
     return cnpj_digits
 
 
+def normalize_phone(phone: str) -> str:
+    """
+    Normalize phone number to digits only and validate length.
+
+    Args:
+        phone: Phone number string (may contain formatting)
+
+    Returns:
+        Normalized phone string (digits only)
+
+    Raises:
+        ValueError: If phone length is not between 1-15 digits
+    """
+    # Strip all non-digit characters
+    normalized = re.sub(r'\D', '', phone)
+    
+    # Validate length
+    if not normalized or len(normalized) < 1 or len(normalized) > 15:
+        raise ValueError(
+            f"Phone number must contain 1-15 digits after normalization. Got: {len(normalized)} digits"
+        )
+    
+    return normalized
+
 def response(
     message: str,
     status_code: Union[int, HTTPStatus] = HTTPStatus.OK,
@@ -102,3 +130,69 @@ def response(
         'headers': default_headers,
         'body': json.dumps(message),
     }
+
+
+def validate_company_exists(company_id: str, db_handler: DatabaseHandler) -> None:
+    """
+    Validate that the company exists in the companies table.
+
+    Args:
+        company_id: Company ID to validate
+        db_handler: DatabaseHandler instance for companies table
+
+    Raises:
+        ValueError: If company does not exist
+    """
+    result = db_handler.get_item(
+        table_name=settings.companies_table_name,
+        key={'companyID': company_id}
+    )
+    
+    if not result:
+        raise ValueError(f"Company with ID '{company_id}' does not exist")
+    
+
+def check_duplicate_phone(company_id: str, phone: str, db_handler: DatabaseHandler) -> None:
+    """
+    Check for duplicate phone number within the same company using GSI.
+
+    Args:
+        company_id: Company ID to scope the duplicate check
+        phone: Normalized phone number
+        db_handler: DatabaseHandler instance for leads table
+
+    Raises:
+        ValueError: If duplicate phone found or GSI is not available
+    """
+    try:
+        # Query the GSI for companyID + phone
+        result = db_handler.query(
+            table_name=settings.leads_table_name,
+            index_name='companyID-phone-index',
+            key_condition_expression='companyID = :company_id AND phone = :phone',
+            expression_attribute_values={
+                ':company_id': company_id,
+                ':phone': phone
+            }
+        )
+        
+        # Check if any items were returned
+        if result and len(result) > 0:
+            raise ValueError(
+                f"A lead with phone number '{phone}' already exists for this company"
+            )
+    
+    except Exception as e:
+        # If GSI doesn't exist yet, provide clear error message
+        error_msg = str(e).lower()
+        if 'index' in error_msg or 'gsi' in error_msg or 'not found' in error_msg:
+            raise ValueError(
+                "GSI 'companyID-phone-index' is not available. "
+                "Please create the GSI on the leads table before using this endpoint. "
+                "See deployment documentation for manual GSI creation steps."
+            )
+        # Re-raise if it's a duplicate phone error
+        if "already exists" in str(e):
+            raise
+        # Re-raise other unexpected errors
+        raise ValueError(f"Error checking for duplicate phone: {str(e)}")
