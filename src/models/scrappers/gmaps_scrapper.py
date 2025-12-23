@@ -657,8 +657,9 @@ class GMapsScrapper(BaseScrapper):
                         **place_without_id,
                     }
 
-                    self.db_handler.put_item(
+                    self.db_handler.insert_item(
                         item=place_data,
+                        primary_key='placeID'
                     )
 
                     self.ensamble['stats']['new_places'] += 1

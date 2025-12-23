@@ -254,6 +254,35 @@ functions:
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
+  gl_add_new_company:
+    handler: src/functions/gl_add_new_company/add_new_company_handler.add_new_company
+    description: HTTP endpoint for creating new companies in the CRM system
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: companies
+          method: post
+          cors: true
+          private: true  # Require API key
+    package:
+      patterns:
+        - src/functions/gl_add_new_company/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: gl_add_new_company
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:Scan
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+
 plugins:
   - serverless-offline
   - serverless-add-api-key

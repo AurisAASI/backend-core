@@ -120,9 +120,9 @@ def create_initial_communication(
     comm_data = {k: v for k, v in comm_data.items() if v != ""}
     
     # Insert into DynamoDB
-    communication_db.put_item(
-        table_name=settings.communication_history_table_name,
-        item=comm_data
+    communication_db.insert_item(
+        item=comm_data,
+        primary_key='communicationID'
     )
     
     logger.info(f"Communication history entry created: {comm_id}")
@@ -185,7 +185,6 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Phone normalized from '{raw_phone}' to '{normalized_phone}'")
         
         # Initialize database handlers
-        # TODO FAZER O COMPANY DB PARA PODER TER A INSERÇÃO...MESMO QUE SEJA SOMENTE AUDITIK... VERIFICAR DATA_SCRAPPER PARA ISSO
         companies_db = DatabaseHandler(table_name=settings.companies_table_name)
         leads_db = DatabaseHandler(table_name=settings.leads_table_name)
         communication_db = DatabaseHandler(table_name=settings.communication_history_table_name)
@@ -222,7 +221,7 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         lead_data = LEAD_SCHEMA.copy()
         
         # Populate required fields
-        lead_data['leadId'] = lead_id
+        lead_data['leadID'] = lead_id
         lead_data['companyID'] = company_id
         lead_data['fullName'] = payload.get('fullName')
         lead_data['phone'] = normalized_phone
@@ -253,18 +252,18 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         lead_data = {k: v for k, v in lead_data.items() if v != ""}
         
         # Insert lead into DynamoDB
-        leads_db.put_item(
-            table_name=settings.leads_table_name,
-            item=lead_data
+        leads_db.insert_item(
+            item=lead_data,
+            primary_key='leadID'
         )
         
         logger.info(f"Lead created successfully with ID: {lead_id}")
         
         return response(
             status_code=201,
-            body={
+            message={
                 'message': 'Lead created successfully',
-                'leadId': lead_id
+                'leadID': lead_id
             }
         )
     

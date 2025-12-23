@@ -10,6 +10,7 @@ from src.functions.data_scrapper.gmaps_handler import gmaps_scrapper
 from src.functions.data_scrapper.website_handler import website_scrapper
 from src.functions.data_scrapper.company_federal_handler import company_federal_scrapper
 from src.functions.gl_add_new_lead.add_new_lead_handler import add_new_lead
+from src.functions.gl_add_new_company.add_new_company_handler import add_new_company
 
 
 # Available lambda functions
@@ -19,6 +20,7 @@ LAMBDA_FUNCTIONS = {
     'website': website_scrapper,
     'company_federal': company_federal_scrapper,
     'add_new_lead': add_new_lead,
+    'add_new_company': add_new_company,
 }
 
 
