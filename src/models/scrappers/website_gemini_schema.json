@@ -1,0 +1,129 @@
+{
+  "type": "object",
+  "properties": {
+    "brand_name": {
+      "type": "string",
+      "description": "Official brand name of the company"
+    },
+    "addresses": {
+      "type": "array",
+      "description": "List of all physical addresses found",
+      "items": {
+        "type": "object",
+        "properties": {
+          "street": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "complement": {
+            "type": "string"
+          },
+          "district": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "postal_code": {
+            "type": "string"
+          },
+          "full_address": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "phones": {
+      "type": "array",
+      "description": "List of phone numbers (up to 4)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "description": "Phone number in format"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "mobile",
+              "whatsapp",
+              "fax",
+              "other"
+            ],
+            "description": "Type of phone number"
+          }
+        }
+      }
+    },
+    "history": {
+      "type": "string",
+      "description": "Brief company history or about section (max 1500 chars)"
+    },
+    "products": {
+      "type": "array",
+      "description": "List of main products offered",
+      "items": {
+        "type": "string"
+      }
+    },
+    "services": {
+      "type": "array",
+      "description": "List of main services offered",
+      "items": {
+        "type": "string"
+      }
+    },
+    "brands": {
+      "type": "array",
+      "description": "List of product brands sold or represented",
+      "items": {
+        "type": "string"
+      }
+    },
+    "social_links": {
+      "type": "object",
+      "description": "Social media links",
+      "properties": {
+        "facebook": {
+          "type": "string"
+        },
+        "instagram": {
+          "type": "string"
+        },
+        "youtube": {
+          "type": "string"
+        },
+        "tiktok": {
+          "type": "string"
+        },
+        "linkedin": {
+          "type": "string"
+        },
+        "twitter": {
+          "type": "string"
+        },
+        "others": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cnpj": {
+      "type": "string",
+      "description": "Brazilian company ID (CNPJ) in format XX.XXX.XXX/XXXX-XX"
+    },
+    "offers_summary": {
+      "type": "string",
+      "description": "Summary of current offers or promotions (max 1500 chars)"
+    }
+  }
+}
