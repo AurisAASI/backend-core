@@ -24,6 +24,18 @@ from src.shared.utils import response, normalize_phone, validate_company_exists,
 logger = Logger(service="add_new_lead")
 settings = Settings()
 
+# Collect the valid users sources from settings
+VALID_USERS_PATH = Path(__file__).parent.parent.parent / 'shared' / 'valid_users.json'
+with open(VALID_USERS_PATH, 'r') as f:
+    VALID_USERS = json.load(f)
+
+# CORS headers to include in all responses
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type,x-api-key,X-Amz-Date,Authorization,X-Api-Key',
+    'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,PUT,DELETE'
+}
+
 # Load schema templates
 LEAD_SCHEMA_PATH = Path(__file__).parent.parent.parent / 'shared' / 'schema' / 'gl_new_lead_schema.json'
 with open(LEAD_SCHEMA_PATH, 'r') as f:
@@ -76,6 +88,12 @@ def validate_payload(payload: Dict[str, Any]) -> None:
     
     if missing_fields:
         raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+
+
+def validate_request_source(user_email: str) -> None:
+    valid_user = next((user for user in VALID_USERS['valid_users'] if user == user_email), None)
+    if not valid_user:
+        raise ValueError("User is not allowed to make requests")
 
 
 def create_initial_communication(
@@ -175,9 +193,24 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         logger.info("Processing new lead creation request")
         
+        # Handle OPTIONS preflight request
+        if event.get('httpMethod') == 'OPTIONS':
+            logger.info("Handling OPTIONS preflight request")
+            return response(
+                status_code=200,
+                message='',
+                headers=CORS_HEADERS
+            )
+        
         # Extract and validate payload
         payload = extract_payload(event)
         validate_payload(payload)
+
+        # TODO Por hora, existe um campo userEmail no body, mas depois será trocado pela logica do COgnito
+        # TODO Remove the validate_request_source logic after integrating with Cognito
+        logger.info("Validating the request source (user email)")
+        validate_request_source(payload.get('userEmail'))
+        logger.info(f"Request source validated for user: {payload.get('userEmail')}")
         
         # Normalize and validate phone
         raw_phone = payload.get('phone', '')
@@ -227,7 +260,7 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         lead_data['phone'] = normalized_phone
         lead_data['city'] = payload.get('city')
         lead_data['allowsMarketing'] = payload.get('allowsMarketing', True)
-        lead_data['entryDate'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        lead_data['entryDate'] = current_timestamp
         lead_data['statusLead'] = 'Aguardando contato'  # Default status
         lead_data['source'] = payload.get('source')
         lead_data['createdAt'] = current_timestamp
@@ -264,19 +297,22 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             message={
                 'message': 'Lead created successfully',
                 'leadID': lead_id
-            }
+            },
+            headers=CORS_HEADERS
         )
     
     except ValueError as e:
         logger.warning(f"Validation error: {str(e)}")
         return response(
             status_code=400,
-            body={'error': str(e)}
+            message={'error': str(e)},
+            headers=CORS_HEADERS
         )
     
     except Exception as e:
         logger.error(f"Unexpected error creating lead: {str(e)}", exc_info=True)
         return response(
             status_code=500,
-            body={'error': 'Internal server error'}
+            message={'error': 'Internal server error'},
+            headers=CORS_HEADERS
         )
