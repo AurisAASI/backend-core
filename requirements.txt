@@ -1,5 +1,5 @@
 # Production dependencies only
-auris_tools==0.1.0
+auris_tools==0.1.1
 pydantic==2.3.0
 aws-lambda-powertools==2.20.0
 requests==2.32.5

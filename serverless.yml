@@ -247,6 +247,7 @@ functions:
           - dynamodb:GetItem
           - dynamodb:PutItem
           - dynamodb:Query
+          - dynamodb:Scan
           - dynamodb:DescribeTable
           - dynamodb:ListTables
         Resource:
@@ -256,6 +257,7 @@ functions:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-communication-history
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:819774487459:layer:gl_add_new_lead:2
 
   gl_add_new_company:
     handler: src/functions/gl_add_new_company/add_new_company_handler.add_new_company
