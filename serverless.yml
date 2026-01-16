@@ -13,10 +13,19 @@ provider:
   timeout: 30
   environment:
     # Global environment variables
+    ACCOUNT_ID: ${env:AWS_ACCOUNT_ID, '819774487459'}
     STAGE: ${self:provider.stage}
     REGION: ${self:provider.region}
     # API Key from AWS Cognito stored in environment
     API_KEY: ${env:API_KEY, ''}
+    # Google Places API configuration (stage-specific)
+    GOOGLE_PLACES_API_KEY_DEV: ${env:GOOGLE_PLACES_API_KEY_DEV, ''}
+    GOOGLE_PLACES_API_KEY_PROD: ${env:GOOGLE_PLACES_API_KEY_PROD, ''}
+    GOOGLE_PLACES_DAILY_QUOTA_LIMIT_DEV: ${env:GOOGLE_PLACES_DAILY_QUOTA_LIMIT_DEV, '10000'}
+    GOOGLE_PLACES_DAILY_QUOTA_LIMIT_PROD: ${env:GOOGLE_PLACES_DAILY_QUOTA_LIMIT_PROD, '20000'}
+    # Google Gemini API configuration (stage-specific)
+    GEMINI_API_KEY_DEV: ${env:GEMINI_API_KEY_DEV, ''}
+    GEMINI_API_KEY_PROD: ${env:GEMINI_API_KEY_PROD, ''}
   apiGateway:
     # Enable API Gateway API keys
     apiKeys:
@@ -47,36 +56,257 @@ package:
     - '!.gitignore'
     - '!.git/**'
     - '!__pycache__/**'
+    - '!**/__pycache__/**'
     - '!tests/**'
     - '!.pytest_cache/**'
     - '!.vscode/**'
     - '!htmlcov/**'
     - '!.github/**'
-    - '.flake8'
-    - '!.env.example'
+    - '!.flake8'
+    - '!.env'
+    - '!.env*'
     - '!.coverage*'
     - '!README.md'
+    - '!*.md'
+    - '!package.json'
+    - '!package-lock.json'
+    - '!serverless.yml'
+    - '!pyproject.toml'
+    - '!requirements*.txt'
+    - '!coverage.xml'
+    - '!code_quality.sh'
+    - '!manage.py'
+    - '!.requirements.zip'
+    - '!*.pyc'
+    - '!**/*.pyc'
 
 functions:
-  hello:
-    handler: src/functions/hello/handler.main
-    description: Example Lambda function
+  city_collector:
+    handler: src/functions/city_collector/handler.city_collector
+    description: City Collector Lambda function
+    timeout: 29
     events:
       - http:
-          path: hello
-          method: get
+          path: city_collector
+          method: post
+          cors: true
+          private: true  # Require API key
+      - eventBridge:
+          pattern:
+            source:
+              - custom.cityCollector
+            detail-type:
+              - City Collection Request
+    package:
+      patterns:
+        - src/functions/city_collector/**
+        - src/shared/**
+    environment:
+      # Function specific environment variables
+      FUNCTION_NAME: city_collector
+      SCRAPER_TASK_QUEUE_URL: !Ref ScraperTaskQueue
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+        Resource: !GetAtt ScraperTaskQueue.Arn
+    layers:
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:city_collector_layer:1
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+
+  gmaps_scrapper:
+    handler: src/functions/data_scrapper/gmaps_handler.gmaps_scrapper
+    description: Data Scrapper Lambda function that processes scraping tasks
+    timeout: 300
+    memorySize: 512
+    events:
+      - sqs:
+          arn: !GetAtt ScraperTaskQueue.Arn
+          batchSize: 1
+    package:
+      patterns:
+        - src/functions/data_scrapper/**
+        - src/shared/**
+        - src/models/**
+    environment:
+      FUNCTION_NAME: data_scrapper
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      PLACES_TABLE: ${self:provider.stage}-auris-core-places
+      WEBSITE_SCRAPER_TASK_QUEUE_URL: !Ref WebsiteScraperTaskQueue
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:Scan
+          - dynamodb:Query
+          - dynamodb:DescribeTable
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places/index/*
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
+          - "arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/*"
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+        Resource: !GetAtt WebsiteScraperTaskQueue.Arn
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:gmaps_scrapper:2
+
+  website_scrapper:
+    handler: src/functions/data_scrapper/website_handler.website_scrapper
+    description: Website Scrapper Lambda function that processes website scraping tasks
+    timeout: 300
+    memorySize: 512
+    events:
+      - sqs:
+          arn: !GetAtt WebsiteScraperTaskQueue.Arn
+          batchSize: 1
+    package:
+      patterns:
+        - '!./**'  # Exclude everything first
+        - 'src/functions/data_scrapper/**'  # Then include only what we need
+        - 'src/shared/**'
+        - 'src/models/**'
+        - '!src/**/__pycache__/**'
+        - '!**/*.pyc'
+    environment:
+      FUNCTION_NAME: website_scrapper
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      COMPANY_FEDERAL_SCRAPER_TASK_QUEUE_URL: !Ref CompanyFederalScraperTaskQueue
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:Query
+          - dynamodb:DescribeTable
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
+          - "arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/*"
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+        Resource: !GetAtt CompanyFederalScraperTaskQueue.Arn
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:website_scrapper:3
+
+  company_federal_scrapper:
+    handler: src/functions/data_scrapper/company_federal_handler.company_federal_scrapper
+    description: Company Federal Scrapper Lambda function that fetches data from OpenCNPJ API
+    timeout: 60
+    memorySize: 256
+    events:
+      - sqs:
+          arn: !GetAtt CompanyFederalScraperTaskQueue.Arn
+          batchSize: 1
+    package:
+      patterns:
+        - src/functions/data_scrapper/**
+        - src/shared/**
+        - src/models/**
+    environment:
+      FUNCTION_NAME: company_federal_scrapper
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:Query
+          - dynamodb:DescribeTable
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies/index/*
+          - "arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/*"
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:company_federal_scrapper:2
+
+  gl_add_new_lead:
+    handler: src/functions/gl_add_new_lead/add_new_lead_handler.add_new_lead
+    description: HTTP endpoint for creating new leads in the CRM system
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: leads
+          method: post
           cors: true
           private: true  # Require API key
     package:
       patterns:
-        - src/functions/hello/**
+        - src/functions/gl_add_new_lead/**
         - src/shared/**
     environment:
-      # Function specific environment variables
-      FUNCTION_NAME: hello
+      FUNCTION_NAME: gl_add_new_lead
+      LEADS_TABLE: ${self:provider.stage}-auris-core-leads
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      COMMUNICATION_HISTORY_TABLE: ${self:provider.stage}-auris-core-communication-history
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:Query
+          - dynamodb:Scan
+          - dynamodb:DescribeTable
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-leads
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-leads/index/*
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-communication-history
+      # ListTables requires Resource "*"; keep it isolated to avoid broadening other actions
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:819774487459:layer:gl_add_new_lead:2
+
+  gl_add_new_company:
+    handler: src/functions/gl_add_new_company/add_new_company_handler.add_new_company
+    description: HTTP endpoint for creating new companies in the CRM system
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: companies
+          method: post
+          cors: true
+          private: true  # Require API key
+    package:
+      patterns:
+        - src/functions/gl_add_new_company/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: gl_add_new_company
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:Scan
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
 plugins:
-  - serverless-python-requirements
   - serverless-offline
   - serverless-add-api-key
 
@@ -84,10 +314,167 @@ custom:
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
     description: API key for ${self:service} service in ${self:provider.stage} stage
-  pythonRequirements:
-    dockerizePip: false
-    layer: true
-    slim: true
-    useDownloadCache: true
-    useStaticCache: true
-    pythonBin: python3.10
+
+resources:
+  Resources:
+    # DynamoDB Tables are managed externally (already exist)
+    # Tables: ${self:provider.stage}-auris-core-companies, ${self:provider.stage}-auris-core-places
+
+    # SQS Queues
+    ScraperTaskQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-scraper-tasks
+        VisibilityTimeout: 300
+        MessageRetentionPeriod: 86400  # 1 day
+        ReceiveMessageWaitTimeSeconds: 0
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ScraperTaskDLQ.Arn
+          maxReceiveCount: 3  # After 3 failed attempts, move to DLQ
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    ScraperTaskDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-scraper-tasks-dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    ScraperAlarmTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-${self:provider.stage}-scraper-alerts
+        DisplayName: Scraper Task Failure Alerts
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    ScraperAlarmTopicSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Protocol: email
+        TopicArn: !Ref ScraperAlarmTopic
+        Endpoint: ${env:ALARM_EMAIL, 'your-email@example.com'}
+
+    ScraperTaskDLQAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ${self:service}-${self:provider.stage}-scraper-dlq-alarm
+        AlarmDescription: Alert when messages are sent to the DLQ (scraping failures)
+        MetricName: ApproximateNumberOfMessagesVisible
+        Namespace: AWS/SQS
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 1
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt ScraperTaskDLQ.QueueName
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref ScraperAlarmTopic
+
+    # Website Scraper SQS Queues
+    WebsiteScraperTaskQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-website-scraper-tasks
+        VisibilityTimeout: 360  # 6 minutes (higher than Lambda timeout)
+        MessageRetentionPeriod: 86400  # 1 day
+        ReceiveMessageWaitTimeSeconds: 0
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt WebsiteScraperTaskDLQ.Arn
+          maxReceiveCount: 2  # After 2 failed attempts, move to DLQ
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    WebsiteScraperTaskDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-website-scraper-tasks-dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    WebsiteScraperTaskDLQAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ${self:service}-${self:provider.stage}-website-scraper-dlq-alarm
+        AlarmDescription: Alert when messages are sent to the website scraper DLQ (scraping failures)
+        MetricName: ApproximateNumberOfMessagesVisible
+        Namespace: AWS/SQS
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 1
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt WebsiteScraperTaskDLQ.QueueName
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref ScraperAlarmTopic
+
+    # Company Federal Scraper SQS Queues
+    CompanyFederalScraperTaskQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-company-federal-scraper-tasks
+        VisibilityTimeout: 90  # 1.5 minutes (higher than Lambda timeout)
+        MessageRetentionPeriod: 86400  # 1 day
+        ReceiveMessageWaitTimeSeconds: 0
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CompanyFederalScraperTaskDLQ.Arn
+          maxReceiveCount: 2  # After 2 failed attempts, move to DLQ
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    CompanyFederalScraperTaskDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-company-federal-scraper-tasks-dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    CompanyFederalScraperTaskDLQAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ${self:service}-${self:provider.stage}-company-federal-scraper-dlq-alarm
+        AlarmDescription: Alert when messages are sent to the company federal scraper DLQ (scraping failures)
+        MetricName: ApproximateNumberOfMessagesVisible
+        Namespace: AWS/SQS
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 1
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt CompanyFederalScraperTaskDLQ.QueueName
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref ScraperAlarmTopic
