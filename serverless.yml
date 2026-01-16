@@ -239,6 +239,7 @@ functions:
       FUNCTION_NAME: gl_add_new_lead
       LEADS_TABLE: ${self:provider.stage}-auris-core-leads
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      COMMUNICATION_HISTORY_TABLE: ${self:provider.stage}-auris-core-communication-history
       AWS_REGION_NAME: ${self:provider.region}
     iamRoleStatements:
       - Effect: Allow
@@ -247,10 +248,12 @@ functions:
           - dynamodb:PutItem
           - dynamodb:Query
           - dynamodb:DescribeTable
+          - dynamodb:ListTables
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-leads
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-leads/index/*
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-communication-history
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
