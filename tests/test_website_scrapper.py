@@ -169,10 +169,13 @@ def sample_gemini_response():
 
 
 # Test WebsiteScrapper initialization
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestWebsiteScrapperInit:
     """Tests for WebsiteScrapper initialization."""
 
-    def test_init_success(self, mock_settings, mock_db_handler, mock_gemini_handler):
+    def test_init_success(
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
+    ):
         """Test successful initialization."""
         scrapper = WebsiteScrapper(
             company_id='test-uuid-123',
@@ -188,7 +191,7 @@ class TestWebsiteScrapperInit:
         assert scrapper.ensamble['status'] == 'in_progress'
 
     def test_init_normalizes_url_without_scheme(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test URL normalization adds https scheme."""
         scrapper = WebsiteScrapper(
@@ -200,7 +203,7 @@ class TestWebsiteScrapperInit:
         assert scrapper.website == 'https://audicare.com.br'
 
     def test_init_invalid_url_raises_error(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test initialization with invalid URL raises ValueError."""
         with pytest.raises(ValueError, match='Invalid URL format'):
@@ -210,7 +213,9 @@ class TestWebsiteScrapperInit:
                 gemini_api_key='test-api-key',
             )
 
-    def test_init_gemini_handler_failure(self, mock_settings, mock_db_handler):
+    def test_init_gemini_handler_failure(
+        self, mock_boto3_setup, mock_settings, mock_db_handler
+    ):
         """Test initialization fails when Gemini handler cannot be created."""
         with patch(
             'src.models.scrappers.website_scrapper.GoogleGeminiHandler',
@@ -225,11 +230,12 @@ class TestWebsiteScrapperInit:
 
 
 # Test URL normalization
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestURLNormalization:
     """Tests for URL normalization."""
 
     def test_normalize_url_adds_https(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test normalization adds https:// to URLs without scheme."""
         scrapper = WebsiteScrapper(
@@ -238,7 +244,7 @@ class TestURLNormalization:
         assert scrapper.website == 'https://example.com'
 
     def test_normalize_url_preserves_http(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test normalization preserves http:// scheme."""
         scrapper = WebsiteScrapper(
@@ -249,7 +255,7 @@ class TestURLNormalization:
         assert scrapper.website == 'http://example.com'
 
     def test_normalize_url_strips_whitespace(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test normalization strips whitespace."""
         scrapper = WebsiteScrapper(
@@ -259,6 +265,7 @@ class TestURLNormalization:
 
 
 # Test robots.txt checking
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestRobotsTxtCheck:
     """Tests for robots.txt checking."""
 
@@ -266,6 +273,7 @@ class TestRobotsTxtCheck:
     def test_check_robots_txt_allowed(
         self,
         mock_robot_parser_class,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -288,6 +296,7 @@ class TestRobotsTxtCheck:
     def test_check_robots_txt_disallowed(
         self,
         mock_robot_parser_class,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -310,6 +319,7 @@ class TestRobotsTxtCheck:
     def test_check_robots_txt_not_found_allows(
         self,
         mock_robot_parser_class,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -330,6 +340,7 @@ class TestRobotsTxtCheck:
 
 
 # Test page discovery strategies
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestPageDiscovery:
     """Tests for page discovery strategies."""
 
@@ -337,6 +348,7 @@ class TestPageDiscovery:
     def test_discover_pages_from_sitemap(
         self,
         mock_get,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -368,6 +380,7 @@ class TestPageDiscovery:
     def test_discover_pages_from_homepage(
         self,
         mock_get,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -392,7 +405,7 @@ class TestPageDiscovery:
         assert any('contato' in page.lower() for page in pages)
 
     def test_discover_pages_common_paths(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test fallback common paths discovery."""
         scrapper = WebsiteScrapper(
@@ -414,6 +427,7 @@ class TestPageDiscovery:
 
 
 # Test HTML fetching
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestHTMLFetching:
     """Tests for HTML content fetching."""
 
@@ -421,6 +435,7 @@ class TestHTMLFetching:
     def test_fetch_page_content_success(
         self,
         mock_get,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -446,7 +461,12 @@ class TestHTMLFetching:
 
     @patch('src.models.scrappers.website_scrapper.requests.get')
     def test_fetch_page_content_404(
-        self, mock_get, mock_settings, mock_db_handler, mock_gemini_handler
+        self,
+        mock_get,
+        mock_boto3_setup,
+        mock_settings,
+        mock_db_handler,
+        mock_gemini_handler,
     ):
         """Test HTML fetch handles 404 error."""
         mock_response = Mock()
@@ -466,7 +486,12 @@ class TestHTMLFetching:
 
     @patch('src.models.scrappers.website_scrapper.requests.get')
     def test_fetch_page_content_timeout(
-        self, mock_get, mock_settings, mock_db_handler, mock_gemini_handler
+        self,
+        mock_get,
+        mock_boto3_setup,
+        mock_settings,
+        mock_db_handler,
+        mock_gemini_handler,
     ):
         """Test HTML fetch handles timeout."""
         import requests
@@ -486,11 +511,17 @@ class TestHTMLFetching:
 
 
 # Test text extraction
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestTextExtraction:
     """Tests for HTML text extraction."""
 
     def test_extract_text_from_html(
-        self, mock_settings, mock_db_handler, mock_gemini_handler, sample_html_about
+        self,
+        mock_boto3_setup,
+        mock_settings,
+        mock_db_handler,
+        mock_gemini_handler,
+        sample_html_about,
     ):
         """Test clean text extraction from HTML."""
         scrapper = WebsiteScrapper(
@@ -508,7 +539,7 @@ class TestTextExtraction:
         assert '<body>' not in text
 
     def test_extract_text_removes_scripts(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test script and style tags are removed."""
         html = """
@@ -537,6 +568,7 @@ class TestTextExtraction:
 
 
 # Test structured data extraction
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestStructuredDataExtraction:
     """Tests for LLM-powered data extraction."""
 
@@ -550,6 +582,7 @@ class TestStructuredDataExtraction:
         self,
         mock_file,
         mock_gemini_class,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         sample_html_about,
@@ -585,7 +618,12 @@ class TestStructuredDataExtraction:
         read_data='{"type": "object", "properties": {}}',
     )
     def test_extract_structured_data_no_content(
-        self, mock_file, mock_settings, mock_db_handler, mock_gemini_handler
+        self,
+        mock_file,
+        mock_boto3_setup,
+        mock_settings,
+        mock_db_handler,
+        mock_gemini_handler,
     ):
         """Test extraction with no page content."""
         scrapper = WebsiteScrapper(
@@ -603,6 +641,7 @@ class TestStructuredDataExtraction:
     def test_extract_structured_data_schema_not_found(
         self,
         mock_file,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -623,11 +662,13 @@ class TestStructuredDataExtraction:
 
 
 # Test database operations
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestDatabaseOperations:
     """Tests for database save operations."""
 
     def test_save_to_database_success(
         self,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -656,7 +697,9 @@ class TestDatabaseOperations:
         assert call_args[1]['updates']['website_scraping_status'] == 'completed'
         assert call_args[1]['updates']['website_data'] == sample_gemini_response
 
-    def test_save_to_database_no_handler(self, mock_settings, mock_gemini_handler):
+    def test_save_to_database_no_handler(
+        self, mock_boto3_setup, mock_settings, mock_gemini_handler
+    ):
         """Test save fails gracefully when DB handler unavailable."""
         with patch(
             'src.models.scrappers.website_scrapper.DatabaseHandler',
@@ -673,7 +716,7 @@ class TestDatabaseOperations:
             assert result is False
 
     def test_save_to_database_update_error(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test save handles database update errors."""
         mock_db_handler.update_item.side_effect = Exception('Database error')
@@ -692,6 +735,7 @@ class TestDatabaseOperations:
 
 
 # Test full collect_data workflow
+@patch('src.models.scrappers.website_scrapper.boto3.setup_default_session')
 class TestCollectDataWorkflow:
     """Tests for complete data collection workflow."""
 
@@ -709,6 +753,7 @@ class TestCollectDataWorkflow:
         mock_get,
         mock_sleep,
         mock_gemini_class,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         sample_html_homepage,
@@ -755,6 +800,7 @@ class TestCollectDataWorkflow:
     def test_collect_data_robots_txt_disallowed(
         self,
         mock_robot_parser_class,
+        mock_boto3_setup,
         mock_settings,
         mock_db_handler,
         mock_gemini_handler,
@@ -777,7 +823,7 @@ class TestCollectDataWorkflow:
         mock_db_handler.update_item.assert_called()
 
     def test_collect_data_invalid_url(
-        self, mock_settings, mock_db_handler, mock_gemini_handler
+        self, mock_boto3_setup, mock_settings, mock_db_handler, mock_gemini_handler
     ):
         """Test workflow handles invalid URL."""
         scrapper = WebsiteScrapper(
@@ -796,7 +842,13 @@ class TestCollectDataWorkflow:
     @patch('src.models.scrappers.website_scrapper.time.sleep')
     @patch('src.models.scrappers.website_scrapper.requests.get')
     def test_collect_data_no_pages_fetched(
-        self, mock_get, mock_sleep, mock_settings, mock_db_handler, mock_gemini_handler
+        self,
+        mock_get,
+        mock_sleep,
+        mock_boto3_setup,
+        mock_settings,
+        mock_db_handler,
+        mock_gemini_handler,
     ):
         """Test workflow handles failure to fetch any pages."""
         mock_response = Mock()

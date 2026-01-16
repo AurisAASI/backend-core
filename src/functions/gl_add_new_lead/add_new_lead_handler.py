@@ -10,18 +10,24 @@ This module provides HTTP endpoint functionality for lead creation with:
 """
 
 import json
-import uuid
 import re
+import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
 from pathlib import Path
-from aws_lambda_powertools import Logger
+from typing import Any, Dict, Optional
 
 from auris_tools.databaseHandlers import DatabaseHandler
-from src.shared.settings import Settings
-from src.shared.utils import response, normalize_phone, validate_company_exists, check_duplicate_phone
+from aws_lambda_powertools import Logger
 
-logger = Logger(service="add_new_lead")
+from src.shared.settings import Settings
+from src.shared.utils import (
+    check_duplicate_phone,
+    normalize_phone,
+    response,
+    validate_company_exists,
+)
+
+logger = Logger(service='add_new_lead')
 settings = Settings()
 
 # Collect the valid users sources from settings
@@ -33,15 +39,25 @@ with open(VALID_USERS_PATH, 'r') as f:
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type,x-api-key,X-Amz-Date,Authorization,X-Api-Key',
-    'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,PUT,DELETE'
+    'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,PUT,DELETE',
 }
 
 # Load schema templates
-LEAD_SCHEMA_PATH = Path(__file__).parent.parent.parent / 'shared' / 'schema' / 'gl_new_lead_schema.json'
+LEAD_SCHEMA_PATH = (
+    Path(__file__).parent.parent.parent
+    / 'shared'
+    / 'schema'
+    / 'gl_new_lead_schema.json'
+)
 with open(LEAD_SCHEMA_PATH, 'r') as f:
     LEAD_SCHEMA = json.load(f)
 
-COMM_HISTORY_SCHEMA_PATH = Path(__file__).parent.parent.parent / 'shared' / 'schema' / 'communication_history_schema.json'
+COMM_HISTORY_SCHEMA_PATH = (
+    Path(__file__).parent.parent.parent
+    / 'shared'
+    / 'schema'
+    / 'communication_history_schema.json'
+)
 with open(COMM_HISTORY_SCHEMA_PATH, 'r') as f:
     COMM_HISTORY_SCHEMA = json.load(f)
 
@@ -61,15 +77,14 @@ def extract_payload(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     body = event.get('body')
     if not body:
-        raise ValueError("Request body is required")
-    
+        raise ValueError('Request body is required')
+
     try:
         if isinstance(body, str):
             return json.loads(body)
         return body
     except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in request body: {str(e)}")
-
+        raise ValueError(f'Invalid JSON in request body: {str(e)}')
 
 
 def validate_payload(payload: Dict[str, Any]) -> None:
@@ -85,15 +100,17 @@ def validate_payload(payload: Dict[str, Any]) -> None:
     # Required fields
     required_fields = ['fullName', 'phone', 'city', 'companyID', 'source']
     missing_fields = [field for field in required_fields if not payload.get(field)]
-    
+
     if missing_fields:
         raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
 
 
 def validate_request_source(user_email: str) -> None:
-    valid_user = next((user for user in VALID_USERS['valid_users'] if user == user_email), None)
+    valid_user = next(
+        (user for user in VALID_USERS['valid_users'] if user == user_email), None
+    )
     if not valid_user:
-        raise ValueError("User is not allowed to make requests")
+        raise ValueError('User is not allowed to make requests')
 
 
 def create_initial_communication(
@@ -103,7 +120,7 @@ def create_initial_communication(
     source: str,
     status: str,
     message: str,
-    communication_db: DatabaseHandler
+    communication_db: DatabaseHandler,
 ) -> str:
     """
     Create initial communication history entry for a new lead.
@@ -122,30 +139,26 @@ def create_initial_communication(
     # Generate communication ID and timestamp
     comm_id = 'comm-' + str(uuid.uuid4())
     current_timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-    
+
     # Build communication data using schema template
     comm_data = COMM_HISTORY_SCHEMA.copy()
     comm_data['communicationID'] = comm_id
     comm_data['companyID'] = company_id
     comm_data['leadID'] = lead_id
-    comm_data['assignedUser'] = assigned_user if assigned_user else ""
+    comm_data['assignedUser'] = assigned_user if assigned_user else ''
     comm_data['communicationDate'] = current_timestamp
     comm_data['status'] = status
     comm_data['source'] = source
     comm_data['message'] = message
-    
-    # Remove empty strings
-    comm_data = {k: v for k, v in comm_data.items() if v != ""}
-    
-    # Insert into DynamoDB
-    communication_db.insert_item(
-        item=comm_data,
-        primary_key='communicationID'
-    )
-    
-    logger.info(f"Communication history entry created: {comm_id}")
-    return comm_id
 
+    # Remove empty strings
+    comm_data = {k: v for k, v in comm_data.items() if v != ''}
+
+    # Insert into DynamoDB
+    communication_db.insert_item(item=comm_data, primary_key='communicationID')
+
+    logger.info(f'Communication history entry created: {comm_id}')
+    return comm_id
 
 
 def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -191,54 +204,54 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     """
     try:
-        logger.info("Processing new lead creation request")
-        
+        logger.info('Processing new lead creation request')
+
         # Handle OPTIONS preflight request
         if event.get('httpMethod') == 'OPTIONS':
-            logger.info("Handling OPTIONS preflight request")
-            return response(
-                status_code=200,
-                message='',
-                headers=CORS_HEADERS
-            )
-        
+            logger.info('Handling OPTIONS preflight request')
+            return response(status_code=200, message='', headers=CORS_HEADERS)
+
         # Extract and validate payload
         payload = extract_payload(event)
         validate_payload(payload)
 
         # TODO Por hora, existe um campo userEmail no body, mas depois será trocado pela logica do COgnito
         # TODO Remove the validate_request_source logic after integrating with Cognito
-        logger.info("Validating the request source (user email)")
+        logger.info('Validating the request source (user email)')
         validate_request_source(payload.get('userEmail'))
         logger.info(f"Request source validated for user: {payload.get('userEmail')}")
-        
+
         # Normalize and validate phone
         raw_phone = payload.get('phone', '')
         normalized_phone = normalize_phone(raw_phone)
         logger.info(f"Phone normalized from '{raw_phone}' to '{normalized_phone}'")
-        
+
         # Initialize database handlers
         companies_db = DatabaseHandler(table_name=settings.companies_table_name)
         leads_db = DatabaseHandler(table_name=settings.leads_table_name)
-        communication_db = DatabaseHandler(table_name=settings.communication_history_table_name)
-        
+        communication_db = DatabaseHandler(
+            table_name=settings.communication_history_table_name
+        )
+
         # Validate company exists
         company_id = payload.get('companyID')
         validate_company_exists(company_id, companies_db)
         logger.info(f"Company '{company_id}' validated successfully")
-        
+
         # Check for duplicate phone within company
         check_duplicate_phone(company_id, normalized_phone, leads_db)
         logger.info(f"No duplicate phone found for company '{company_id}'")
-        
+
         # Generate leadId and timestamps
-        lead_id = 'lead-'+str(uuid.uuid4())
-        
+        lead_id = 'lead-' + str(uuid.uuid4())
+
         # Create initial communication history entry
         assigned_user = payload.get('assignedUser')
         source = payload.get('source')
-        initial_message = f"Lead criado via {source}. Status inicial: Aguardando contato"
-        
+        initial_message = (
+            f'Lead criado via {source}. Status inicial: Aguardando contato'
+        )
+
         comm_id = create_initial_communication(
             company_id=company_id,
             lead_id=lead_id,
@@ -246,13 +259,15 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             source=source,
             status='Aguardando contato',
             message=initial_message,
-            communication_db=communication_db
+            communication_db=communication_db,
         )
-        current_timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-        
+        current_timestamp = (
+            datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        )
+
         # Build complete lead data using schema template
         lead_data = LEAD_SCHEMA.copy()
-        
+
         # Populate required fields
         lead_data['leadID'] = lead_id
         lead_data['companyID'] = company_id
@@ -265,7 +280,7 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         lead_data['source'] = payload.get('source')
         lead_data['createdAt'] = current_timestamp
         lead_data['updatedAt'] = current_timestamp
-        
+
         # Populate optional fields if provided
         if payload.get('email'):
             lead_data['email'] = payload.get('email')
@@ -277,42 +292,34 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             lead_data['reminderDate'] = payload.get('reminderDate')
         if payload.get('statusClassification'):
             lead_data['statusClassification'] = payload.get('statusClassification')
-        
+
         # Set initial communication history with the created communication ID
         lead_data['communicationHistoryIds'] = [comm_id]
-        
+
         # Remove empty string values to avoid storing unnecessary data in DynamoDB
-        lead_data = {k: v for k, v in lead_data.items() if v != ""}
-        
+        lead_data = {k: v for k, v in lead_data.items() if v != ''}
+
         # Insert lead into DynamoDB
-        leads_db.insert_item(
-            item=lead_data,
-            primary_key='leadID'
-        )
-        
-        logger.info(f"Lead created successfully with ID: {lead_id}")
-        
+        leads_db.insert_item(item=lead_data, primary_key='leadID')
+
+        logger.info(f'Lead created successfully with ID: {lead_id}')
+
         return response(
             status_code=201,
-            message={
-                'message': 'Lead created successfully',
-                'leadID': lead_id
-            },
-            headers=CORS_HEADERS
+            message={'message': 'Lead created successfully', 'leadID': lead_id},
+            headers=CORS_HEADERS,
         )
-    
+
     except ValueError as e:
-        logger.warning(f"Validation error: {str(e)}")
+        logger.warning(f'Validation error: {str(e)}')
         return response(
-            status_code=400,
-            message={'error': str(e)},
-            headers=CORS_HEADERS
+            status_code=400, message={'error': str(e)}, headers=CORS_HEADERS
         )
-    
+
     except Exception as e:
-        logger.error(f"Unexpected error creating lead: {str(e)}", exc_info=True)
+        logger.error(f'Unexpected error creating lead: {str(e)}', exc_info=True)
         return response(
             status_code=500,
             message={'error': 'Internal server error'},
-            headers=CORS_HEADERS
+            headers=CORS_HEADERS,
         )

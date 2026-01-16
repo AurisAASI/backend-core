@@ -23,7 +23,9 @@ except ImportError:
 logger = Logger(service='gmaps-scraper')
 
 # Load company schema template
-COMPANY_SCHEMA_PATH = Path(__file__).parent.parent.parent / 'shared' / 'schema' / 'company_schema.json'
+COMPANY_SCHEMA_PATH = (
+    Path(__file__).parent.parent.parent / 'shared' / 'schema' / 'company_schema.json'
+)
 with open(COMPANY_SCHEMA_PATH, 'r') as f:
     COMPANY_SCHEMA = json.load(f)
 
@@ -635,9 +637,9 @@ class GMapsScrapper(BaseScrapper):
                     company_data['niche'] = self.niche
                     company_data['collection_status'] = self.ensamble['status']
                     company_data['collection_reason'] = self.ensamble['status_reason']
-                    
+
                     # Remove empty strings
-                    company_data = {k: v for k, v in company_data.items() if v != ""}
+                    company_data = {k: v for k, v in company_data.items() if v != ''}
 
                     # Note: This requires a separate DatabaseHandler instance for companies table
                     companies_db = DatabaseHandler(
@@ -657,10 +659,7 @@ class GMapsScrapper(BaseScrapper):
                         **place_without_id,
                     }
 
-                    self.db_handler.insert_item(
-                        item=place_data,
-                        primary_key='placeID'
-                    )
+                    self.db_handler.insert_item(item=place_data, primary_key='placeID')
 
                     self.ensamble['stats']['new_places'] += 1
                     logger.info(

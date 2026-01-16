@@ -55,9 +55,14 @@ class Settings:
     @property
     def communication_history_table_name(self) -> str:
         """Get the communication history DynamoDB table name for current stage."""
-        return os.environ.get('COMMUNICATION_HISTORY_TABLE', f'{self.stage}-auris-core-communication-history')
+        return os.environ.get(
+            'COMMUNICATION_HISTORY_TABLE',
+            f'{self.stage}-auris-core-communication-history',
+        )
 
-    def get_table_name(self, table_type: Literal['companies', 'places', 'leads', 'leads']) -> str:
+    def get_table_name(
+        self, table_type: Literal['companies', 'places', 'leads', 'leads']
+    ) -> str:
         """
         Get DynamoDB table name by type.
 

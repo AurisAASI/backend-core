@@ -91,13 +91,13 @@ def normalize_phone(phone: str) -> str:
     """
     # Strip all non-digit characters
     normalized = re.sub(r'\D', '', phone)
-    
+
     # Validate length
     if not normalized or len(normalized) < 1 or len(normalized) > 15:
         raise ValueError(
-            f"Phone number must contain 1-15 digits after normalization. Got: {len(normalized)} digits"
+            f'Phone number must contain 1-15 digits after normalization. Got: {len(normalized)} digits'
         )
-    
+
     return normalized
 
 
@@ -112,8 +112,8 @@ def normalize_string(text: str) -> str:
         Normalized string (lowercase, stripped)
     """
     if not text:
-        return ""
-    
+        return ''
+
     # Convert to lowercase and strip leading/trailing whitespace
     # Also collapse multiple spaces into single space
     return ' '.join(text.lower().strip().split())
@@ -138,33 +138,33 @@ def calculate_levenshtein_distance(s1: str, s2: str) -> int:
         return len(s2)
     if not s2:
         return len(s1)
-    
+
     # Create matrix with dimensions (len(s1)+1) x (len(s2)+1)
     rows = len(s1) + 1
     cols = len(s2) + 1
     matrix = [[0 for _ in range(cols)] for _ in range(rows)]
-    
+
     # Initialize first column (transform s1 to empty string)
     for i in range(rows):
         matrix[i][0] = i
-    
+
     # Initialize first row (transform empty string to s2)
     for j in range(cols):
         matrix[0][j] = j
-    
+
     # Fill matrix using dynamic programming
     for i in range(1, rows):
         for j in range(1, cols):
             # Cost of substitution (0 if characters match, 1 if different)
-            cost = 0 if s1[i-1] == s2[j-1] else 1
-            
+            cost = 0 if s1[i - 1] == s2[j - 1] else 1
+
             matrix[i][j] = min(
-                matrix[i-1][j] + 1,      # Deletion
-                matrix[i][j-1] + 1,      # Insertion
-                matrix[i-1][j-1] + cost  # Substitution
+                matrix[i - 1][j] + 1,  # Deletion
+                matrix[i][j - 1] + 1,  # Insertion
+                matrix[i - 1][j - 1] + cost,  # Substitution
             )
-    
-    return matrix[rows-1][cols-1]
+
+    return matrix[rows - 1][cols - 1]
 
 
 def calculate_similarity_ratio(s1: str, s2: str, normalize: bool = True) -> float:
@@ -186,20 +186,20 @@ def calculate_similarity_ratio(s1: str, s2: str, normalize: bool = True) -> floa
     if normalize:
         s1 = normalize_string(s1)
         s2 = normalize_string(s2)
-    
+
     # Handle empty strings
     if not s1 and not s2:
         return 100.0
     if not s1 or not s2:
         return 0.0
-    
+
     # Calculate Levenshtein distance
     distance = calculate_levenshtein_distance(s1, s2)
-    
+
     # Calculate similarity ratio based on longest string
     max_len = max(len(s1), len(s2))
     similarity = ((max_len - distance) / max_len) * 100
-    
+
     return round(similarity, 2)
 
 
@@ -246,15 +246,15 @@ def validate_company_exists(company_id: str, db_handler: DatabaseHandler) -> Non
     Raises:
         ValueError: If company does not exist
     """
-    result = db_handler.get_item(
-        key={'companyID': company_id}
-    )
-    
+    result = db_handler.get_item(key={'companyID': company_id})
+
     if not result:
         raise ValueError(f"Company with ID '{company_id}' does not exist")
-    
 
-def check_duplicate_phone(company_id: str, phone: str, db_handler: DatabaseHandler) -> None:
+
+def check_duplicate_phone(
+    company_id: str, phone: str, db_handler: DatabaseHandler
+) -> None:
     """
     Check for duplicate phone number within the same company using GSI.
 
@@ -275,28 +275,28 @@ def check_duplicate_phone(company_id: str, phone: str, db_handler: DatabaseHandl
             KeyConditionExpression='companyID = :company_id AND phone = :phone',
             ExpressionAttributeValues={
                 ':company_id': {'S': company_id},
-                ':phone': {'S': phone}
-            }
+                ':phone': {'S': phone},
+            },
         )
-        
+
         # Check if any items were returned
         items = response.get('Items', [])
         if items and len(items) > 0:
             raise ValueError(
                 f"A lead with phone number '{phone}' already exists for this company"
             )
-    
+
     except Exception as e:
         # If GSI doesn't exist yet, provide clear error message
         error_msg = str(e).lower()
         if 'index' in error_msg or 'gsi' in error_msg or 'not found' in error_msg:
             raise ValueError(
                 "GSI 'companyID-phone-index' is not available. "
-                "Please create the GSI on the leads table before using this endpoint. "
-                "See deployment documentation for manual GSI creation steps."
+                'Please create the GSI on the leads table before using this endpoint. '
+                'See deployment documentation for manual GSI creation steps.'
             )
         # Re-raise if it's a duplicate phone error
-        if "already exists" in str(e):
+        if 'already exists' in str(e):
             raise
         # Re-raise other unexpected errors
-        raise ValueError(f"Error checking for duplicate phone: {str(e)}")
+        raise ValueError(f'Error checking for duplicate phone: {str(e)}')
