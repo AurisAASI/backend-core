@@ -56,15 +56,29 @@ package:
     - '!.gitignore'
     - '!.git/**'
     - '!__pycache__/**'
+    - '!**/__pycache__/**'
     - '!tests/**'
     - '!.pytest_cache/**'
     - '!.vscode/**'
     - '!htmlcov/**'
     - '!.github/**'
-    - '.flake8'
-    - '!.env.example'
+    - '!.flake8'
+    - '!.env'
+    - '!.env*'
     - '!.coverage*'
     - '!README.md'
+    - '!*.md'
+    - '!package.json'
+    - '!package-lock.json'
+    - '!serverless.yml'
+    - '!pyproject.toml'
+    - '!requirements*.txt'
+    - '!coverage.xml'
+    - '!code_quality.sh'
+    - '!manage.py'
+    - '!.requirements.zip'
+    - '!*.pyc'
+    - '!**/*.pyc'
 
 functions:
   city_collector:
@@ -129,7 +143,6 @@ functions:
           - dynamodb:UpdateItem
           - dynamodb:Scan
           - dynamodb:Query
-          - dynamodb:ListTables
           - dynamodb:DescribeTable
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-places
@@ -156,9 +169,12 @@ functions:
           batchSize: 1
     package:
       patterns:
-        - src/functions/data_scrapper/**
-        - src/shared/**
-        - src/models/**
+        - '!./**'  # Exclude everything first
+        - 'src/functions/data_scrapper/**'  # Then include only what we need
+        - 'src/shared/**'
+        - 'src/models/**'
+        - '!src/**/__pycache__/**'
+        - '!**/*.pyc'
     environment:
       FUNCTION_NAME: website_scrapper
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
@@ -171,7 +187,6 @@ functions:
           - dynamodb:PutItem
           - dynamodb:UpdateItem
           - dynamodb:Query
-          - dynamodb:ListTables
           - dynamodb:DescribeTable
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
@@ -183,7 +198,7 @@ functions:
         Resource: !GetAtt CompanyFederalScraperTaskQueue.Arn
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:website_scrapper:2
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID}:layer:website_scrapper:3
 
   company_federal_scrapper:
     handler: src/functions/data_scrapper/company_federal_handler.company_federal_scrapper
@@ -210,7 +225,6 @@ functions:
           - dynamodb:PutItem
           - dynamodb:UpdateItem
           - dynamodb:Query
-          - dynamodb:ListTables
           - dynamodb:DescribeTable
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
@@ -249,12 +263,16 @@ functions:
           - dynamodb:Query
           - dynamodb:Scan
           - dynamodb:DescribeTable
-          - dynamodb:ListTables
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-leads
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-leads/index/*
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-companies
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID}:table/${self:provider.stage}-auris-core-communication-history
+      # ListTables requires Resource "*"; keep it isolated to avoid broadening other actions
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
       - arn:aws:lambda:${self:provider.region}:819774487459:layer:gl_add_new_lead:2
@@ -296,13 +314,6 @@ custom:
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
     description: API key for ${self:service} service in ${self:provider.stage} stage
-  pythonRequirements:
-    dockerizePip: false
-    layer: false
-    slim: true
-    useDownloadCache: true
-    useStaticCache: true
-    pythonBin: python3.10
 
 resources:
   Resources:
