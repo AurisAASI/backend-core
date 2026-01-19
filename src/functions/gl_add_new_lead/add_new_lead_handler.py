@@ -13,6 +13,7 @@ import json
 import re
 import uuid
 from datetime import datetime, timezone
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -239,7 +240,14 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Company '{company_id}' validated successfully")
 
         # Check for duplicate phone within company
-        check_duplicate_phone(company_id, normalized_phone, leads_db)
+        phone_validation = check_duplicate_phone(company_id, normalized_phone, leads_db)
+        if phone_validation['status'] != HTTPStatus.OK:
+            logger.warning(phone_validation['message'])
+            return response(
+                status_code=phone_validation['status'],
+                message={'error': phone_validation['message']},
+                headers=CORS_HEADERS,
+            )
         logger.info(f"No duplicate phone found for company '{company_id}'")
 
         # Generate leadId and timestamps

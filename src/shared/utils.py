@@ -282,9 +282,12 @@ def check_duplicate_phone(
         # Check if any items were returned
         items = response.get('Items', [])
         if items and len(items) > 0:
-            raise ValueError(
-                f"A lead with phone number '{phone}' already exists for this company"
-            )
+            return {
+                'status': HTTPStatus.CONFLICT,
+                'message': f"A lead with phone number '{phone}' already exists for this company",
+            }
+        else:
+            return {'status': HTTPStatus.OK, 'message': 'No duplicate phone found'}
 
     except Exception as e:
         # If GSI doesn't exist yet, provide clear error message
