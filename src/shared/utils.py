@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 from http import HTTPStatus
 from typing import Any, Dict, Optional, Union
 
@@ -7,6 +8,11 @@ from auris_tools.databaseHandlers import DatabaseHandler
 
 from src.shared.settings import settings
 
+# Collect the valid users sources from settings
+VALID_USERS_PATH = Path(__file__).parent  / 'valid_users.json'
+with open(VALID_USERS_PATH, 'r') as f:
+    VALID_USERS = json.load(f)
+    
 
 def validate_cnpj(cnpj: str) -> bool:
     """
@@ -303,3 +309,11 @@ def check_duplicate_phone(
             raise
         # Re-raise other unexpected errors
         raise ValueError(f'Error checking for duplicate phone: {str(e)}')
+
+
+def validate_request_source(user_email: str) -> None:
+    valid_user = next(
+        (user for user in VALID_USERS['valid_users'] if user == user_email), None
+    )
+    if not valid_user:
+        raise ValueError('User is not allowed to make requests')
