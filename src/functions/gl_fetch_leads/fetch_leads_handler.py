@@ -12,11 +12,13 @@ Returns { "leads": [...] } with 200 even when empty.
 
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
+import json
 from typing import Any, Dict, List
 
 from auris_tools.databaseHandlers import DatabaseHandler
 from aws_lambda_powertools import Logger
 from boto3.dynamodb.conditions import Attr
+from pathlib import Path
 
 from src.shared.settings import Settings
 from src.shared.utils import response, validate_request_source
@@ -25,6 +27,15 @@ logger = Logger(service='fetch_leads_reminders')
 settings = Settings()
 
 
+# Load schema templates
+LEAD_SCHEMA_PATH = (
+    Path(__file__).parent.parent.parent
+    / 'shared'
+    / 'schema'
+    / 'gl_new_lead_schema.json'
+)
+with open(LEAD_SCHEMA_PATH, 'r') as f:
+    LEAD_SCHEMA = json.load(f)
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -81,20 +92,22 @@ def _scan_leads(filters: Dict[str, str]) -> List[Dict[str, Any]]:
 
 def _map_leads(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Project items to response schema and stamp updatedAt."""
+    # Lead schema template that matches gl_new_lead_schema.json
+    lead_schema_template = LEAD_SCHEMA.copy()
+    
     now_iso = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     projected = []
+    
     for item in items:
-        projected.append(
-            {
-                'leadID': item.get('leadID'),
-                'fullName': item.get('fullName'),
-                'phone': item.get('phone'),
-                'statusLead': item.get('statusLead'),
-                'reminderDate': item.get('reminderDate'),
-                'entryDate': item.get('entryDate'),
-                'updatedAt': now_iso,
-            }
-        )
+        # Copy schema template and fill with item data
+        lead = lead_schema_template.copy()
+        for key in lead:
+            if key in item:
+                lead[key] = item[key]
+        # Always stamp updatedAt with current timestamp
+        lead['updatedAt'] = now_iso
+        projected.append(lead)
+    
     return projected
 
 
