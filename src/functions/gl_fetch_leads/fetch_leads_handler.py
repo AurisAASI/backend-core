@@ -12,8 +12,6 @@ Returns { "leads": [...] } with 200 even when empty.
 
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
-from pathlib import Path
-import json
 from typing import Any, Dict, List
 
 from auris_tools.databaseHandlers import DatabaseHandler
