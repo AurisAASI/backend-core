@@ -1,7 +1,7 @@
 import json
 import re
-from pathlib import Path
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from auris_tools.databaseHandlers import DatabaseHandler
@@ -9,10 +9,10 @@ from auris_tools.databaseHandlers import DatabaseHandler
 from src.shared.settings import settings
 
 # Collect the valid users sources from settings
-VALID_USERS_PATH = Path(__file__).parent  / 'valid_users.json'
+VALID_USERS_PATH = Path(__file__).parent / 'valid_users.json'
 with open(VALID_USERS_PATH, 'r') as f:
     VALID_USERS = json.load(f)
-    
+
 
 def validate_cnpj(cnpj: str) -> bool:
     """

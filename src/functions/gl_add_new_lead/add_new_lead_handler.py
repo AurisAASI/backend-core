@@ -26,7 +26,7 @@ from src.shared.utils import (
     normalize_phone,
     response,
     validate_company_exists,
-    validate_request_source
+    validate_request_source,
 )
 
 logger = Logger(service='add_new_lead')
@@ -100,7 +100,6 @@ def validate_payload(payload: Dict[str, Any]) -> None:
 
     if missing_fields:
         raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
-
 
 
 def create_initial_communication(
@@ -277,7 +276,11 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         lead_data['source'] = payload.get('source')
         lead_data['createdAt'] = current_timestamp
         lead_data['updatedAt'] = current_timestamp
-        lead_data['reminderDate'] = payload.get('reminderDate') if payload.get('reminderDate') else current_timestamp
+        lead_data['reminderDate'] = (
+            payload.get('reminderDate')
+            if payload.get('reminderDate')
+            else current_timestamp
+        )
 
         # Populate optional fields if provided
         if payload.get('email'):
