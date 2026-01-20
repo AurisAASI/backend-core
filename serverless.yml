@@ -306,6 +306,38 @@ functions:
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
+  gl_fetch_leads:
+    handler: src/functions/gl_fetch_leads/fetch_leads_handler.fetch_leads_reminders
+    description: HTTP endpoint for fetching lead based on reminders date and company ID
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: leads/fetch_reminders
+          method: get
+          cors: true
+          private: true  # Require API key
+    package:
+      patterns:
+        - src/functions/gl_fetch_leads/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: gl_fetch_leads
+      LEADS_TABLE: ${self:provider.stage}-auris-core-leads
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:Scan
+          - dynamodb:Query
+          - dynamodb:DescribeTable
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads/index/*
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+
 plugins:
   - serverless-offline
   - serverless-add-api-key
