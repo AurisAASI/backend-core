@@ -1,0 +1,27 @@
+{
+  "httpMethod": "GET",
+  "path": "/leads/fetch_reminders",
+  "queryStringParameters": {
+    "companyID": "896504cc-bd92-448b-bc92-74bfcd2c73c2",
+    "userEmail": "antonio.filho@auditik.com.br"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "x-api-key": "test-api-key"
+  },
+  "requestContext": {
+    "identity": {
+      "sourceIp": "127.0.0.1"
+    },
+    "requestId": "test-request-id",
+    "stage": "dev",
+    "requestTime": "19/Jan/2026:12:00:00 +0000",
+    "protocol": "HTTP/1.1",
+    "resourcePath": "/leads/fetch_reminders",
+    "resourceId": "test-resource-id",
+    "accountId": "819774487459",
+    "apiId": "test-api-id",
+    "authorizer": {}
+  },
+  "isBase64Encoded": false
+}

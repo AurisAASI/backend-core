@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "test-message-789",
+      "body": "{\"company_id\": \"test-company-123\", \"cnpj\": \"45.523.817/0001-82\"}"
+    }
+  ]
+}

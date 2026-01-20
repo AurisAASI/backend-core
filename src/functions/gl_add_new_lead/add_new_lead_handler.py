@@ -26,15 +26,11 @@ from src.shared.utils import (
     normalize_phone,
     response,
     validate_company_exists,
+    validate_request_source,
 )
 
 logger = Logger(service='add_new_lead')
 settings = Settings()
-
-# Collect the valid users sources from settings
-VALID_USERS_PATH = Path(__file__).parent.parent.parent / 'shared' / 'valid_users.json'
-with open(VALID_USERS_PATH, 'r') as f:
-    VALID_USERS = json.load(f)
 
 # CORS headers to include in all responses
 CORS_HEADERS = {
@@ -104,14 +100,6 @@ def validate_payload(payload: Dict[str, Any]) -> None:
 
     if missing_fields:
         raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
-
-
-def validate_request_source(user_email: str) -> None:
-    valid_user = next(
-        (user for user in VALID_USERS['valid_users'] if user == user_email), None
-    )
-    if not valid_user:
-        raise ValueError('User is not allowed to make requests')
 
 
 def create_initial_communication(
@@ -245,7 +233,7 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.warning(phone_validation['message'])
             return response(
                 status_code=phone_validation['status'],
-                message={'error': phone_validation['message']},
+                message={'message': phone_validation['message']},
                 headers=CORS_HEADERS,
             )
         logger.info(f"No duplicate phone found for company '{company_id}'")
@@ -288,6 +276,11 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         lead_data['source'] = payload.get('source')
         lead_data['createdAt'] = current_timestamp
         lead_data['updatedAt'] = current_timestamp
+        lead_data['reminderDate'] = (
+            payload.get('reminderDate')
+            if payload.get('reminderDate')
+            else current_timestamp
+        )
 
         # Populate optional fields if provided
         if payload.get('email'):
@@ -296,8 +289,6 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             lead_data['audiologist'] = payload.get('audiologist')
         if payload.get('assignedUser'):
             lead_data['assignedUser'] = payload.get('assignedUser')
-        if payload.get('reminderDate'):
-            lead_data['reminderDate'] = payload.get('reminderDate')
         if payload.get('statusClassification'):
             lead_data['statusClassification'] = payload.get('statusClassification')
 
@@ -321,13 +312,13 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except ValueError as e:
         logger.warning(f'Validation error: {str(e)}')
         return response(
-            status_code=400, message={'error': str(e)}, headers=CORS_HEADERS
+            status_code=400, message={'message': str(e)}, headers=CORS_HEADERS
         )
 
     except Exception as e:
         logger.error(f'Unexpected error creating lead: {str(e)}', exc_info=True)
         return response(
             status_code=500,
-            message={'error': 'Internal server error'},
+            message={'message': 'Internal server error'},
             headers=CORS_HEADERS,
         )
