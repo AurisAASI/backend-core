@@ -129,9 +129,11 @@ def fetch_leads_reminders(event: Dict[str, Any], context: Any) -> Dict[str, Any]
         if not items:
             logger.info('Scan returned an empty result set')
             return response(status_code=HTTPStatus.OK, message={'message': 'No leads found in the company database'}, headers=CORS_HEADERS)
+        logger.info(f'Scan returned {len(items)} items')
         
         leads = _map_leads(items)
 
+        logger.info(f'Mapped leads with total of {len(leads)} entries')
         return response(status_code=HTTPStatus.OK, message={'leads': leads}, headers=CORS_HEADERS)
 
     except ValueError as exc:
