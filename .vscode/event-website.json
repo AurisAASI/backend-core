@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "test-message-456",
+      "body": "{\"company_id\": \"test-company-123\", \"website\": \"https://www.auditik.com.br\"}"
+    }
+  ]
+}

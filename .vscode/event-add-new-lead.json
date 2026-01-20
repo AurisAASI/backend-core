@@ -1,0 +1,28 @@
+{
+  "resource": "/leads",
+  "path": "/leads",
+  "httpMethod": "POST",
+  "headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "x-api-key": "test-api-key"
+  },
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "accountId": "123456789012",
+    "resourceId": "abc123",
+    "stage": "dev",
+    "requestId": "test-request-id",
+    "identity": {
+      "sourceIp": "127.0.0.1",
+      "userAgent": "PostmanRuntime/7.29.0"
+    },
+    "resourcePath": "/leads",
+    "httpMethod": "POST",
+    "apiId": "test123"
+  },
+  "body": "{\"fullName\": \"João Silva\", \"phone\": \"+55 11 98765-4323\", \"email\": \"joao@example.com\", \"city\": \"São Paulo\", \"companyID\": \"896504cc-bd92-448b-bc92-74bfcd2c73c2\", \"assignedUser\": \"user-5c3cd1a7-be37-4af6-bd20-785130bc9ce9\", \"source\": \"Auditik Site\", \"allowsMarketing\": true, \"userEmail\": \"antonio.filho@auditik.com.br\"}",
+  "isBase64Encoded": false
+}
