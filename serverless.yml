@@ -343,6 +343,43 @@ functions:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
       - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_fetch_leads:1
 
+  gl_fetch_lead_history:
+    handler: src/functions/gl_fetch_lead_history/fetch_lead_history_handler.fetch_lead_history
+    description: HTTP endpoint for fetching organized communication history by communicationIDs and company ID
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: leads/fetch_history
+          method: post
+          cors: true
+          private: true  # Require API key
+    package:
+      patterns:
+        - src/functions/gl_fetch_lead_history/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: gl_fetch_lead_history
+      LEADS_TABLE: ${self:provider.stage}-auris-core-leads
+      COMMUNICATION_HISTORY_TABLE: ${self:provider.stage}-auris-core-communication-history
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:BatchGetItem
+          - dynamodb:DescribeTable
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-communication-history
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_fetch_lead_history:1
+
 plugins:
   - serverless-offline
   - serverless-add-api-key

@@ -12,6 +12,7 @@ from src.functions.data_scrapper.company_federal_handler import company_federal_
 from src.functions.gl_add_new_lead.add_new_lead_handler import add_new_lead
 from src.functions.gl_add_new_company.add_new_company_handler import add_new_company
 from src.functions.gl_fetch_leads.fetch_leads_handler import fetch_leads_reminders
+from src.functions.gl_fetch_lead_history.fetch_lead_history_handler import fetch_lead_history
 
 
 # Available lambda functions
@@ -23,6 +24,7 @@ LAMBDA_FUNCTIONS = {
     'add_new_lead': add_new_lead,
     'add_new_company': add_new_company,
     'fetch_leads': fetch_leads_reminders,
+    'fetch_lead_history': fetch_lead_history,
 }
 
 

@@ -94,6 +94,18 @@
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: fetch_lead_history",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "fetch_lead_history",
+                "-e", "${workspaceFolder}/.vscode/event-fetch-lead-history.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
