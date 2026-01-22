@@ -1,0 +1,18 @@
+{
+    "update_data": {
+        "leadID": "lead-3dae6adf-2e89-4ab8-a2bd-b69152ce7f78",
+        "companyID": "896504cc-bd92-448b-bc92-74bfcd2c73c2",
+        "fullName": "João Silva Mendes",
+        "phone": "5516987650000",
+        "email": "joao.silva@example.com",
+        "city": "São Bernardo do Campo",
+        "allowsMarketing": true,
+        "entryDate": "2026-01-22T09:00:00.000Z",
+        "statusLead": "Em contato",
+        "statusClassification": "Quente",
+        "source": "Phone",
+        "audiologist": "Dra. Souza",
+        "reminderDate": "2026-01-23T09:00:00.000Z",
+        "observations": "Interessado em aparelhos auditivos avançados."
+    }
+}
