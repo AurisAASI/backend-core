@@ -62,7 +62,7 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
     6. Optionally update lead status
 
     Args:
-        event: Lambda invocation event with enriched payload structure. 
+        event: Lambda invocation event with enriched payload structure.
         See example at the event-gl-communication-registration.json file.
         context: Lambda context object
 
@@ -84,13 +84,11 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
 
         # Extract payload and metadata
         form_data = event.get('update_data', {})
-        
+
         if not form_data:
             raise ValueError('Payload is required')
 
-        logger.info(
-            f'Registering update lead data from form input: {form_data}'
-        )
+        logger.info(f'Registering update lead data from form input: {form_data}')
         # Initialize database handlers
         leads_db = DatabaseHandler(table_name=settings.leads_table_name)
         communication_db = DatabaseHandler(
@@ -152,9 +150,7 @@ def _validate_lead_payload(payload: Dict[str, Any], metadata: Dict[str, Any]) ->
     """
     # Validate metadata fields
     required_metadata = ['companyID']
-    missing_metadata = [
-        field for field in required_metadata if not metadata.get(field)
-    ]
+    missing_metadata = [field for field in required_metadata if not metadata.get(field)]
     if missing_metadata:
         raise ValueError(
             f"Missing required metadata fields: {', '.join(missing_metadata)}"
@@ -243,23 +239,37 @@ def _update_lead_and_communication(
         communication_db: DatabaseHandler for communication history table
     """
     lead_id = lead_update_data.get('leadID')
-    lead_db_info = leads_db._deserialize_item(leads_db.get_item(key={'leadID': lead_id}))
+    lead_db_info = leads_db._deserialize_item(
+        leads_db.get_item(key={'leadID': lead_id})
+    )
     updated_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
     # Collect new infos that come from form data
     new_lead_info = _collect_new_lead_info(lead_update_data, lead_db_info)
-    if __isObservationContentDuplicated(lead_update_data.get('observations'), lead_db_info.get('communicationHistoryIds'), communication_db):
-        raise ValueError('Observation content is duplicated from existing communications')
+    if __isObservationContentDuplicated(
+        lead_update_data.get('observations'),
+        lead_db_info.get('communicationHistoryIds'),
+        communication_db,
+    ):
+        raise ValueError(
+            'Observation content is duplicated from existing communications'
+        )
 
     # Get existing communication history IDs and creating new communication entry
     comm_history_ids = lead_db_info.get('communicationHistoryIds', [])
     new_comm_id = create_communication_entry(
         lead_id=lead_update_data.get('leadID'),
         company_id=lead_db_info.get('companyID'),
-        assigned_user=new_lead_info.get('assigned_user') if new_lead_info.get('assigned_user') else lead_db_info.get('assignedUser'),
+        assigned_user=new_lead_info.get('assigned_user')
+        if new_lead_info.get('assigned_user')
+        else lead_db_info.get('assignedUser'),
         communication_date=updated_at,
-        status=new_lead_info.get('statusLead') if new_lead_info.get('statusLead') else lead_db_info.get('statusLead'),
-        source=new_lead_info.get('source') if new_lead_info.get('source') else lead_db_info.get('source'),
+        status=new_lead_info.get('statusLead')
+        if new_lead_info.get('statusLead')
+        else lead_db_info.get('statusLead'),
+        source=new_lead_info.get('source')
+        if new_lead_info.get('source')
+        else lead_db_info.get('source'),
         message=lead_update_data.get('observations'),
         communication_db=communication_db,
     )
@@ -269,17 +279,18 @@ def _update_lead_and_communication(
 
     # Update the lead database record
     input_updates = {
-            **new_lead_info,
-            'communicationHistoryIds': comm_history_ids,
-            'updatedAt': updated_at,
-        }
+        **new_lead_info,
+        'communicationHistoryIds': comm_history_ids,
+        'updatedAt': updated_at,
+    }
     leads_db.update_item(
         key=lead_id,
         primary_key='leadID',
         updates=input_updates,
     )
-    logger.info(f"Updated lead record with new communication and lead info: {input_updates}")
-
+    logger.info(
+        f'Updated lead record with new communication and lead info: {input_updates}'
+    )
 
     logger.info(
         f'Lead {lead_id} updated with communication {new_comm_id} '
@@ -287,6 +298,7 @@ def _update_lead_and_communication(
     )
 
     return new_comm_id, lead_id
+
 
 def _collect_new_lead_info(
     lead_form_data: Dict[str, Any], lead_db_data: Dict[str, Any]
@@ -337,7 +349,8 @@ def _collect_new_lead_info(
 
     # Validate all difference fields exist in schema
     invalid_fields = [
-        field for field in differences.keys() 
+        field
+        for field in differences.keys()
         if field not in valid_schema_fields and field != 'observations'
     ]
     if invalid_fields:
@@ -348,7 +361,12 @@ def _collect_new_lead_info(
     logger.info(f'All {len(differences)} difference fields validated against schema')
     return differences
 
-def __isObservationContentDuplicated(observation_content: Optional[str], communication_history_ids: Optional[list], communication_db) -> bool:
+
+def __isObservationContentDuplicated(
+    observation_content: Optional[str],
+    communication_history_ids: Optional[list],
+    communication_db,
+) -> bool:
     """
     Check if the observation content is duplicated from existing communications.
 
@@ -372,7 +390,6 @@ def __isObservationContentDuplicated(observation_content: Optional[str], communi
                 comm_record = communication_db._deserialize_item(comm_record)
             if comm_record and 'message' in comm_record:
                 existing_communications.append(comm_record['message'])
-
 
     for existing in existing_communications:
         if observation_content.strip() == existing.strip():

@@ -62,7 +62,9 @@ def gl_queue_manager(event, context):
         if not records:
             error_msg = 'No SQS records found in event'
             logger.error(error_msg)
-            return response(status_code=HTTPStatus.BAD_REQUEST, message={'error': error_msg})
+            return response(
+                status_code=HTTPStatus.BAD_REQUEST, message={'error': error_msg}
+            )
 
         record = records[0]
         message_id = record.get('messageId')
@@ -75,7 +77,9 @@ def gl_queue_manager(event, context):
             except json.JSONDecodeError as e:
                 error_msg = f'Invalid JSON in message body: {str(e)}'
                 logger.error(error_msg)
-                return response(status_code=HTTPStatus.BAD_REQUEST, message={'error': error_msg})
+                return response(
+                    status_code=HTTPStatus.BAD_REQUEST, message={'error': error_msg}
+                )
         else:
             payload = body
 
@@ -84,16 +88,18 @@ def gl_queue_manager(event, context):
         # Extract and validate required fields
         operation_type = payload.get('operationType', '').strip().lower()
         operation_payload = payload.get('payload')
-        timestamp = payload.get('timestamp', '')
         user_email = payload.get('userEmail', '').strip()
         company_id = payload.get('companyID', '').strip()
+        timestamp = payload.get('timestamp', '')
 
         # Validate operationType and payload
         try:
             _validate_operation_type(operation_type)
             _validate_payload_by_operation_type(operation_type, operation_payload)
         except ValueError as e:
-            return response(status_code=HTTPStatus.BAD_REQUEST, message={'error': str(e)})
+            return response(
+                status_code=HTTPStatus.BAD_REQUEST, message={'error': str(e)}
+            )
 
         # Get target Lambda function name
         target_function_name = OPERATION_TYPE_MAPPING[operation_type]
@@ -131,7 +137,10 @@ def gl_queue_manager(event, context):
         except Exception as e:
             error_msg = f'Error invoking Lambda {target_function_name}: {str(e)}'
             logger.error(error_msg)
-            return response(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, message={'error': error_msg})
+            return response(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                message={'error': error_msg},
+            )
 
         logger.info(
             f'Successfully invoked Lambda {target_function_name}. '
@@ -142,17 +151,19 @@ def gl_queue_manager(event, context):
         return response(
             status_code=HTTPStatus.OK,
             message={
-            'message': 'Operation executed successfully',
-            'operationType': operation_type,
-            'lambdaStatusCode': status_code,
-            'result': response_payload,
-            }
+                'message': 'Operation executed successfully',
+                'operationType': operation_type,
+                'lambdaStatusCode': status_code,
+                'result': response_payload,
+            },
         )
 
     except Exception as e:
         error_msg = f'Unexpected error processing operation: {str(e)}'
         logger.exception(error_msg)
-        return response(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, message={'error': error_msg})
+        return response(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, message={'error': error_msg}
+        )
 
 
 def _validate_operation_type(operation_type: str) -> None:
@@ -176,7 +187,7 @@ def _validate_operation_type(operation_type: str) -> None:
         )
         logger.error(error_msg)
         raise ValueError(error_msg)
-    
+
 
 def _validate_payload_by_operation_type(operation_type: str, payload: Any) -> None:
     """Validate the payload field based on operationType.
@@ -196,7 +207,9 @@ def _validate_payload_by_operation_type(operation_type: str, payload: Any) -> No
     # Add specific payload validations per operationType as needed
     if operation_type == 'communication_registration':
         if not isinstance(payload, dict):
-            error_msg = 'Invalid payload for communication_registration: must be a JSON object'
+            error_msg = (
+                'Invalid payload for communication_registration: must be a JSON object'
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
         # Further field validations can be added here
