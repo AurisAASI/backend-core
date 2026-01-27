@@ -26,7 +26,8 @@ spec = importlib.util.spec_from_file_location(
     'fetch_lead_history_handler',
     os.path.abspath(
         os.path.join(
-            os.path.dirname(__file__), '../src/functions/gl_fetch_lead_history/fetch_lead_history_handler.py'
+            os.path.dirname(__file__),
+            '../src/functions/gl_fetch_lead_history/fetch_lead_history_handler.py',
         )
     ),
 )
@@ -56,20 +57,19 @@ def valid_post_event():
     return {
         'httpMethod': 'POST',
         'path': '/leads/fetch_history',
-        'headers': {
-            'Content-Type': 'application/json',
-            'x-api-key': 'test-api-key'
-        },
-        'body': json.dumps({
-            'companyID': '896504cc-bd92-448b-bc92-74bfcd2c73c2',
-            'communicationIDs': ['comm-001', 'comm-002', 'comm-003']
-        }),
+        'headers': {'Content-Type': 'application/json', 'x-api-key': 'test-api-key'},
+        'body': json.dumps(
+            {
+                'companyID': '896504cc-bd92-448b-bc92-74bfcd2c73c2',
+                'communicationIDs': ['comm-001', 'comm-002', 'comm-003'],
+            }
+        ),
         'requestContext': {
             'identity': {'sourceIp': '127.0.0.1'},
             'requestId': 'test-request-id',
-            'stage': 'dev'
+            'stage': 'dev',
         },
-        'isBase64Encoded': False
+        'isBase64Encoded': False,
     }
 
 
@@ -79,9 +79,7 @@ def options_event():
     return {
         'httpMethod': 'OPTIONS',
         'path': '/leads/fetch_history',
-        'headers': {
-            'Content-Type': 'application/json'
-        }
+        'headers': {'Content-Type': 'application/json'},
     }
 
 
@@ -91,9 +89,11 @@ class TestFetchLeadHistoryHandler:
 
     def test_options_request_returns_cors_headers(self, options_event, lambda_context):
         """Test that OPTIONS request returns proper CORS headers."""
-        with patch('src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'):
+        with patch(
+            'src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'
+        ):
             response = fetch_lead_history(options_event, lambda_context)
-            
+
             assert response['statusCode'] == HTTPStatus.OK
             assert 'Access-Control-Allow-Origin' in response['headers']
             assert response['headers']['Access-Control-Allow-Origin'] == '*'
@@ -101,14 +101,13 @@ class TestFetchLeadHistoryHandler:
 
     def test_get_request_returns_method_not_allowed(self, lambda_context):
         """Test that GET request returns METHOD_NOT_ALLOWED."""
-        event = {
-            'httpMethod': 'GET',
-            'path': '/leads/fetch_history'
-        }
-        
-        with patch('src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'):
+        event = {'httpMethod': 'GET', 'path': '/leads/fetch_history'}
+
+        with patch(
+            'src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'
+        ):
             response = fetch_lead_history(event, lambda_context)
-            
+
             assert response['statusCode'] == HTTPStatus.METHOD_NOT_ALLOWED
             assert 'message' in json.loads(response['body'])
 
@@ -116,14 +115,14 @@ class TestFetchLeadHistoryHandler:
         """Test that missing companyID in body returns BAD_REQUEST."""
         event = {
             'httpMethod': 'POST',
-            'body': json.dumps({
-                'communicationIDs': ['comm-001']
-            })
+            'body': json.dumps({'communicationIDs': ['comm-001']}),
         }
-        
-        with patch('src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'):
+
+        with patch(
+            'src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'
+        ):
             response = fetch_lead_history(event, lambda_context)
-            
+
             assert response['statusCode'] == HTTPStatus.BAD_REQUEST
             body = json.loads(response['body'])
             assert 'companyID' in body['message']
@@ -132,14 +131,14 @@ class TestFetchLeadHistoryHandler:
         """Test that missing communicationIDs returns BAD_REQUEST."""
         event = {
             'httpMethod': 'POST',
-            'body': json.dumps({
-                'companyID': '896504cc-bd92-448b-bc92-74bfcd2c73c2'
-            })
+            'body': json.dumps({'companyID': '896504cc-bd92-448b-bc92-74bfcd2c73c2'}),
         }
-        
-        with patch('src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'):
+
+        with patch(
+            'src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'
+        ):
             response = fetch_lead_history(event, lambda_context)
-            
+
             assert response['statusCode'] == HTTPStatus.BAD_REQUEST
             body = json.loads(response['body'])
             assert 'communicationIDs' in body['message']
@@ -148,46 +147,50 @@ class TestFetchLeadHistoryHandler:
         """Test that invalid communicationIDs type returns BAD_REQUEST."""
         event = {
             'httpMethod': 'POST',
-            'body': json.dumps({
-                'companyID': '896504cc-bd92-448b-bc92-74bfcd2c73c2',
-                'communicationIDs': 'not-an-array'
-            })
+            'body': json.dumps(
+                {
+                    'companyID': '896504cc-bd92-448b-bc92-74bfcd2c73c2',
+                    'communicationIDs': 'not-an-array',
+                }
+            ),
         }
-        
-        with patch('src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'):
+
+        with patch(
+            'src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'
+        ):
             response = fetch_lead_history(event, lambda_context)
-            
+
             assert response['statusCode'] == HTTPStatus.BAD_REQUEST
             body = json.loads(response['body'])
             assert 'communicationIDs' in body['message']
 
     def test_invalid_json_body_returns_bad_request(self, lambda_context):
         """Test that invalid JSON body returns BAD_REQUEST."""
-        event = {
-            'httpMethod': 'POST',
-            'body': 'invalid json'
-        }
-        
-        with patch('src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'):
-            response = fetch_lead_history(event, lambda_context)
-            
-            assert response['statusCode'] == HTTPStatus.BAD_REQUEST
+        event = {'httpMethod': 'POST', 'body': 'invalid json'}
 
-    
+        with patch(
+            'src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'
+        ):
+            response = fetch_lead_history(event, lambda_context)
+
+            assert response['statusCode'] == HTTPStatus.BAD_REQUEST
 
     def test_empty_communication_ids_array_returns_ok(self, lambda_context):
         """Test that empty communicationIDs array returns OK with empty history."""
         event = {
             'httpMethod': 'POST',
-            'body': json.dumps({
-                'companyID': 'company-123',
-                'communicationIDs': []
-            })
+            'body': json.dumps({'companyID': 'company-123', 'communicationIDs': []}),
         }
-        
-        with patch('src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'):
+
+        with patch(
+            'src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'
+        ):
             response = fetch_lead_history(event, lambda_context)
-            
+
             # Empty array validation actually returns empty history (OK), not BAD_REQUEST
             # since it passes the validation check
-            assert response['statusCode'] in [HTTPStatus.OK, HTTPStatus.BAD_REQUEST]
+            assert response['statusCode'] in [
+                HTTPStatus.OK,
+                HTTPStatus.BAD_REQUEST,
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+            ]

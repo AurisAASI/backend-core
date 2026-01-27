@@ -380,6 +380,75 @@ functions:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
       - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_fetch_lead_history:1
 
+  gl_queue_manager:
+    handler: src/functions/gl_queue_manager/gl_queue_manager_handler.gl_queue_manager
+    description: Hub lambda function that routes operations by invoking target Lambda functions synchronously
+    timeout: 29
+    memorySize: 128
+    events:
+      - sqs:
+          arn: !GetAtt OperationsQueue.Arn
+          batchSize: 1
+    package:
+      patterns:
+        - src/functions/gl_queue_manager/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: gl_queue_manager
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - lambda:InvokeFunction
+        Resource:
+          - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:function:gl_communication_registration
+          - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:function:${self:service}-${self:provider.stage}-*
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+
+  gl_communication_registration:
+    handler: src/functions/gl_communication_registration/gl_communication_registration_handler.communication_registration
+    description: Register communications and update lead records with validation (HTTP endpoint or invoked by gl_queue_manager)
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: leads/communication_register
+          method: post
+          cors: true
+          private: true  # Require API key
+    package:
+      patterns:
+        - src/functions/gl_communication_registration/**
+        - src/shared/**
+        - src/shared/schema/gl_new_lead_schema.json
+        - src/shared/schema/communication_history_schema.json
+    environment:
+      FUNCTION_NAME: gl_communication_registration
+      LEADS_TABLE: ${self:provider.stage}-auris-core-leads
+      COMMUNICATION_HISTORY_TABLE: ${self:provider.stage}-auris-core-communication-history
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-communication-history
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_communication_registration:1
+
 plugins:
   - serverless-offline
   - serverless-add-api-key
@@ -549,6 +618,53 @@ resources:
         Dimensions:
           - Name: QueueName
             Value: !GetAtt CompanyFederalScraperTaskDLQ.QueueName
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref ScraperAlarmTopic
+
+    # Operations Queue for Hub Lambda (gl_queue_manager)
+    OperationsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-gl-operations-queue
+        VisibilityTimeout: 60
+        MessageRetentionPeriod: 86400  # 1 day
+        ReceiveMessageWaitTimeSeconds: 0
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OperationsQueueDLQ.Arn
+          maxReceiveCount: 3  # After 3 failed attempts, move to DLQ
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    OperationsQueueDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-gl-operations-queue-dlq
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+    OperationsQueueDLQAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: ${self:service}-${self:provider.stage}-operations-dlq-alarm
+        AlarmDescription: Alert when messages are sent to the operations queue DLQ
+        MetricName: ApproximateNumberOfMessagesVisible
+        Namespace: AWS/SQS
+        Statistic: Sum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 1
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt OperationsQueueDLQ.QueueName
         TreatMissingData: notBreaching
         AlarmActions:
           - !Ref ScraperAlarmTopic

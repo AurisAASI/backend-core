@@ -117,6 +117,16 @@ class Settings:
         """Get the company federal scraper task queue name for current stage."""
         return f'backend-core-{self.stage}-company-federal-scraper-tasks'
 
+    @property
+    def operations_queue_url(self) -> str:
+        """Get the operations queue URL for hub lambda routing."""
+        return os.environ.get('OPERATIONS_QUEUE_URL', '')
+
+    @property
+    def operations_queue_name(self) -> str:
+        """Get the operations queue name for current stage."""
+        return f'backend-core-{self.stage}-gl-operations-queue'
+
     # Google Places API Configuration
     @property
     def google_places_api_key(self) -> str:
