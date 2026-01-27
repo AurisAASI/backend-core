@@ -25,6 +25,12 @@ from src.shared.utils import response
 logger = Logger(service='gl-communication-registration')
 settings = Settings()
 
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type,x-api-key,X-Amz-Date,Authorization,X-Api-Key',
+    'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,PUT,DELETE',
+}
+
 # Load communication history schema template
 COMM_HISTORY_SCHEMA_PATH = (
     Path(__file__).parent.parent.parent
@@ -46,15 +52,52 @@ with open(LEAD_SCHEMA_PATH, 'r') as f:
     LEAD_SCHEMA = json.load(f)
 
 
+def _extract_payload_from_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract payload from event based on trigger type (API Gateway or SQS).
+
+    Args:
+        event: Lambda invocation event
+
+    Returns:
+        Extracted payload dictionary
+
+    Raises:
+        ValueError: If payload cannot be extracted or parsed
+    """
+    # Check if it's an API Gateway event
+    if 'body' in event and isinstance(event.get('body'), str):
+        logger.info('Detected API Gateway trigger')
+        try:
+            body = json.loads(event['body'])
+            return body.get('update_data', body)
+        except json.JSONDecodeError as e:
+            logger.error(f'Failed to parse API Gateway body JSON: {str(e)}')
+            raise ValueError('Invalid JSON in request body')
+
+    # Check if it's an SQS event
+    if 'update_data' in event:
+        logger.info('Detected SQS/Queue Manager trigger')
+        return event.get('update_data', {})
+
+    # Check if it's direct payload (for flexibility)
+    if 'leadID' in event or 'observations' in event:
+        logger.info('Detected direct payload trigger')
+        return event
+
+    raise ValueError('Unable to determine trigger type or extract payload')
+
+
 def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for registering a new communication for an existing lead.
 
-    This function is invoked synchronously by gl_queue_manager and receives
-    an enriched payload with metadata.
+    This function can be invoked in two ways:
+    1. Via API Gateway POST request (direct HTTP trigger)
+    2. Via SQS event from gl_queue_manager (synchronous invocation)
 
     Process:
-    1. Extract payload and metadata from event
+    1. Detect trigger type and extract payload accordingly
     2. Validate required fields (leadID, companyID, message)
     3. Validate lead exists and belongs to company
     4. Create communication history entry
@@ -62,8 +105,9 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
     6. Optionally update lead status
 
     Args:
-        event: Lambda invocation event with enriched payload structure.
-        See example at the event-gl-communication-registration.json file.
+        event: Lambda invocation event. Can be:
+            - API Gateway event with 'body' containing JSON payload
+            - SQS event with enriched payload in 'update_data'
         context: Lambda context object
 
     Returns:
@@ -82,8 +126,12 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
         logger.info('Processing communication registration request')
         logger.info(f'Event: {json.dumps(event)}')
 
-        # Extract payload and metadata
-        form_data = event.get('update_data', {})
+        # Handle preflight
+        if event.get('httpMethod') == 'OPTIONS':
+            return response(status_code=HTTPStatus.OK, message='', headers=CORS_HEADERS)
+
+        # Extract payload based on trigger type
+        form_data = _extract_payload_from_event(event)
 
         if not form_data:
             raise ValueError('Payload is required')
@@ -107,6 +155,7 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
                 return response(
                     status_code=HTTPStatus.BAD_REQUEST,
                     message={'error': str(e)},
+                    headers=CORS_HEADERS,
                 )
             raise
 
@@ -121,11 +170,16 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
                 'communicationID': new_comm_id,
                 'leadID': lead_id,
             },
+            headers=CORS_HEADERS,
         )
 
     except ValueError as e:
         logger.warning(f'Validation error: {str(e)}')
-        return response(status_code=HTTPStatus.BAD_REQUEST, message={'error': str(e)})
+        return response(
+            status_code=HTTPStatus.BAD_REQUEST,
+            message={'error': str(e)},
+            headers=CORS_HEADERS,
+        )
 
     except Exception as e:
         logger.error(
@@ -134,6 +188,7 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
         return response(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             message={'error': 'Internal server error'},
+            headers=CORS_HEADERS,
         )
 
 
