@@ -408,9 +408,15 @@ functions:
 
   gl_communication_registration:
     handler: src/functions/gl_communication_registration/gl_communication_registration_handler.communication_registration
-    description: Register communications and update lead records with validation (invoked by gl_queue_manager)
+    description: Register communications and update lead records with validation (HTTP endpoint or invoked by gl_queue_manager)
     timeout: 29
     memorySize: 256
+    events:
+      - http:
+          path: leads/communication_register
+          method: post
+          cors: true
+          private: true  # Require API key
     package:
       patterns:
         - src/functions/gl_communication_registration/**
@@ -435,6 +441,10 @@ functions:
           - dynamodb:PutItem
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-communication-history
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
       - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_communication_registration:1
