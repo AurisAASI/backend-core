@@ -135,6 +135,7 @@ def _map_history_entry(
     )
     message = comm.get('message')
     lead_id = comm.get('leadID')
+    status = comm.get('status')
     return {
         'leadId': lead_id,
         'leadName': lead_name,
