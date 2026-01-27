@@ -38,15 +38,6 @@ PLACE_DETAILS_QUOTA_COST = 17  # Place Details Basic
 DUPLICATE_DISTANCE_THRESHOLD_METERS = 50
 
 
-# TODO TEM UM ERRO QUANDO O DATABASEHANDLER INICIA (NAO ACHA A TABELA
-# {
-#     "level": "ERROR",
-#     "location": "__init__:82",
-#     "message": "Failed to initialize database handler: Table does not exist: dev-auris-core-places",
-#     "timestamp": "2025-12-08 17:05:19,895+0000",
-#     "service": "gmaps-scraper",
-#     "xray_trace_id": "1-6937054d-96d534c6ba4bf94bc8b44c60"
-# }
 class GMapsScrapper(BaseScrapper):
     """
     Creates the AASI company web scrapping to collect general information.

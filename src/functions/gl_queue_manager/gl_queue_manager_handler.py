@@ -54,6 +54,8 @@ def gl_queue_manager(event, context):
     Returns:
         Dict with success status (200) or error status
     """
+
+    # TODO: RETIRADO O SERVIÇO COMMUNCATION_REGISTRATION PARA SER DIRETO COM API GATEWAY. DEIXEI ESSA FILA AQUI PARA PODER INCLUIR OUTROS SERVIÇOS DEPOIS (REPORTS, ETC)
     logger.info(f'Processing SQS event: {json.dumps(event)}')
 
     try:
@@ -204,13 +206,12 @@ def _validate_payload_by_operation_type(operation_type: str, payload: Any) -> No
         logger.error(error_msg)
         raise ValueError(error_msg)
 
-    # Add specific payload validations per operationType as needed
-    if operation_type == 'communication_registration':
-        if not isinstance(payload, dict):
-            error_msg = (
-                'Invalid payload for communication_registration: must be a JSON object'
-            )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-        # Further field validations can be added here
-        # TODO: Implement additional validations as needed for the communication_registration payload
+    # # Add specific payload validations per operationType as needed
+    # if operation_type == 'communication_registration':
+    #     if not isinstance(payload, dict):
+    #         error_msg = (
+    #             'Invalid payload for communication_registration: must be a JSON object'
+    #         )
+    #         logger.error(error_msg)
+    #         raise ValueError(error_msg)
+    #     # Further field validations can be added here
