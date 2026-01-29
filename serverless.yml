@@ -401,10 +401,11 @@ functions:
         Action:
           - lambda:InvokeFunction
         Resource:
-          - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:function:gl_communication_registration
+          - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:function:gl-add-new-lead
           - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:function:${self:service}-${self:provider.stage}-*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_queue_manager:1
 
   gl_communication_registration:
     handler: src/functions/gl_communication_registration/gl_communication_registration_handler.communication_registration
