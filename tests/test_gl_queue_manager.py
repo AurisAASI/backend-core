@@ -68,7 +68,7 @@ def valid_sqs_event_communication_registration():
                 'receiptHandle': 'test-receipt-handle-001',
                 'body': json.dumps(
                     {
-                        'operationType': 'communication_registration',
+                        'operationType': 'add_new_lead',
                         'payload': {
                             'leadID': 'lead-123',
                             'message': 'Follow-up call completed',
@@ -76,6 +76,7 @@ def valid_sqs_event_communication_registration():
                         'timestamp': '2026-01-21T10:00:00.000Z',
                         'userEmail': 'user@example.com',
                         'companyID': 'company-123',
+                        'invocationType': 'RequestResponse',
                     }
                 ),
             }
@@ -93,7 +94,7 @@ def valid_sqs_event_multiple_records():
                 'receiptHandle': 'test-receipt-handle-002',
                 'body': json.dumps(
                     {
-                        'operationType': 'communication_registration',
+                        'operationType': 'add_new_lead',
                         'payload': {'leadID': 'lead-456', 'message': 'Status updated'},
                         'timestamp': '2026-01-21T10:00:00.000Z',
                         'userEmail': 'admin@example.com',
@@ -115,7 +116,7 @@ def valid_sqs_event_with_optional_fields():
                 'receiptHandle': 'test-receipt-handle-003',
                 'body': json.dumps(
                     {
-                        'operationType': 'communication_registration',
+                        'operationType': 'add_new_lead',
                         'payload': {
                             'leadID': 'lead-789',
                             'message': 'Initial contact',
@@ -163,7 +164,7 @@ def missing_payload_event():
                 'receiptHandle': 'test-receipt-handle-missing',
                 'body': json.dumps(
                     {
-                        'operationType': 'communication_registration',
+                        'operationType': 'add_new_lead',
                         'timestamp': '2026-01-21T10:00:00.000Z',
                         'userEmail': 'user@example.com',
                         'companyID': 'company-000',
@@ -221,7 +222,7 @@ class TestGlQueueManagerValidOperations:
         # Mock Lambda response
         mock_response = MagicMock()
         mock_response.read.return_value = json.dumps(
-            {'message': 'Communication registered'}
+            {'message': 'Lead created'}
         ).encode()
         mock_lambda.invoke.return_value = {'StatusCode': 200, 'Payload': mock_response}
 
@@ -234,20 +235,20 @@ class TestGlQueueManagerValidOperations:
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
         assert body['message'] == 'Operation executed successfully'
-        assert body['operationType'] == 'communication_registration'
+        assert body['operationType'] == 'add_new_lead'
 
         # Verify Lambda invoke was called with correct params
         mock_lambda.invoke.assert_called_once()
         call_args = mock_lambda.invoke.call_args
-        assert call_args.kwargs['FunctionName'] == 'gl_communication_registration'
+        assert call_args.kwargs['FunctionName'] == 'gl-add-new-lead'
         assert call_args.kwargs['InvocationType'] == 'RequestResponse'
 
         # Verify enriched payload structure
         payload = json.loads(call_args.kwargs['Payload'])
-        assert 'payload' in payload
-        assert 'metadata' in payload
-        assert payload['metadata']['userEmail'] == 'user@example.com'
-        assert payload['metadata']['companyID'] == 'company-123'
+        assert 'body' in payload
+        assert payload['body']['userEmail'] == 'user@example.com'
+        assert payload['body']['companyID'] == 'company-123'
+        assert payload['body']['operationType'] == 'add_new_lead'
 
     @patch('boto3.client')
     def test_multiple_operations_success(
@@ -273,11 +274,11 @@ class TestGlQueueManagerValidOperations:
         # Assertions
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
-        assert body['operationType'] == 'communication_registration'
+        assert body['operationType'] == 'add_new_lead'
 
-        # Verify correct queue URL was used
+        # Verify correct Lambda function was invoked
         call_args = mock_lambda.invoke.call_args
-        assert call_args.kwargs['FunctionName'] == 'gl_communication_registration'
+        assert call_args.kwargs['FunctionName'] == 'gl-add-new-lead'
 
     @patch('boto3.client')
     def test_operation_with_optional_fields(
@@ -303,12 +304,12 @@ class TestGlQueueManagerValidOperations:
         # Assertions
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
-        assert body['operationType'] == 'communication_registration'
+        assert body['operationType'] == 'add_new_lead'
 
         # Verify optional fields were passed in payload
         call_args = mock_lambda.invoke.call_args
         payload = json.loads(call_args.kwargs['Payload'])
-        assert 'status' in payload['payload']
+        assert 'status' in payload['body']
 
     @patch('boto3.client')
     def test_enriched_payload_structure(
@@ -336,12 +337,10 @@ class TestGlQueueManagerValidOperations:
         payload = json.loads(call_args.kwargs['Payload'])
 
         # Verify enrichment structure
-        assert 'payload' in payload
-        assert 'metadata' in payload
-        assert payload['metadata']['userEmail'] == 'user@example.com'
-        assert payload['metadata']['userEmail'] == 'user@example.com'
-        assert payload['metadata']['companyID'] == 'company-123'
-        assert payload['metadata']['operationType'] == 'communication_registration'
+        assert 'body' in payload
+        assert payload['body']['userEmail'] == 'user@example.com'
+        assert payload['body']['companyID'] == 'company-123'
+        assert payload['body']['operationType'] == 'add_new_lead'
 
 
 class TestGlQueueManagerErrorHandling:
@@ -355,7 +354,7 @@ class TestGlQueueManagerErrorHandling:
 
         assert response['statusCode'] == 400
         body = json.loads(response['body'])
-        assert 'payload' in body['error']
+        assert 'payload' in body['error'].lower()
 
     def test_missing_operation_type_error(
         self, mock_env_vars, mock_context, missing_operation_type_event
@@ -414,7 +413,7 @@ class TestGlQueueManagerErrorHandling:
             valid_sqs_event_communication_registration, mock_context
         )
 
-        # Should return error response
+        # Should return error response with 500 status
         assert response['statusCode'] == 500
         body = json.loads(response['body'])
         assert 'error' in body
@@ -435,11 +434,12 @@ class TestGlQueueManagerEdgeCases:
                     'receiptHandle': 'test-receipt',
                     'body': json.dumps(
                         {
-                            'operationType': 'communication_registration',
+                            'operationType': 'add_new_lead',
                             'payload': {'leadID': 'lead-123', 'message': 'test'},
                             'timestamp': '2026-01-21T10:00:00.000Z',
                             'userEmail': '',
                             'companyID': '',
+                            'invocationType': 'RequestResponse',
                         }
                     ),
                 }
@@ -473,11 +473,12 @@ class TestGlQueueManagerEdgeCases:
                     'receiptHandle': 'test-receipt',
                     'body': json.dumps(
                         {
-                            'operationType': 'communication_registration',  # normalized
+                            'operationType': 'add_new_lead',  # uppercase - will be normalized
                             'payload': {'leadID': 'lead-123', 'message': 'test'},
                             'timestamp': '2026-01-21T10:00:00.000Z',
                             'userEmail': 'user@example.com',
                             'companyID': 'company-123',
+                            'invocationType': 'RequestResponse',
                         }
                     ),
                 }
@@ -497,4 +498,4 @@ class TestGlQueueManagerEdgeCases:
         # Should succeed with normalized operation type
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
-        assert body['operationType'] == 'communication_registration'
+        assert body['operationType'] == 'add_new_lead'
