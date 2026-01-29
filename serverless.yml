@@ -249,6 +249,7 @@ functions:
       patterns:
         - src/functions/gl_add_new_lead/**
         - src/shared/**
+        - src/models/**
     environment:
       FUNCTION_NAME: gl_add_new_lead
       LEADS_TABLE: ${self:provider.stage}-auris-core-leads
@@ -260,22 +261,230 @@ functions:
         Action:
           - dynamodb:GetItem
           - dynamodb:PutItem
+          - dynamodb:UpdateItem
           - dynamodb:Query
-          - dynamodb:Scan
           - dynamodb:DescribeTable
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads/index/*
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-companies
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-communication-history
-      # ListTables requires Resource "*"; keep it isolated to avoid broadening other actions
       - Effect: Allow
         Action:
           - dynamodb:ListTables
         Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:819774487459:layer:gl_add_new_lead:2
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_add_new_lead:3
+
+  gl_database_import_generate_url:
+    handler: src/functions/gl_database_import/gl_database_import_handler.generate_presigned_upload_url
+    description: Generate pre-signed S3 URL for database import file upload
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: database-import/generate-upload-url
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-api-key
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 3600
+      - http:
+          path: database-import/generate-upload-url
+          method: post
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-api-key
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 3600
+          private: true  # Require API key
+    package:
+      patterns:
+        - src/functions/gl_database_import/**
+        - src/shared/**
+        - src/models/**
+    environment:
+      FUNCTION_NAME: gl_database_import_generate_url
+      IMPORT_STATUS_TABLE: ${self:provider.stage}-auris-core-import-status
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:Query
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-import-status
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-import-status/index/*
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - s3:HeadBucket
+        Resource:
+          - arn:aws:s3:::auris-database-imports
+      - Effect: Allow
+        Action:
+          - s3:PutObject
+          - s3:PutObjectAcl
+        Resource:
+          - arn:aws:s3:::auris-database-imports/*
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_database_import:1
+
+  gl_database_import_orchestrator:
+    handler: src/functions/gl_database_import/gl_database_import_handler.database_import_orchestrator
+    description: Process uploaded CSV/XLSX files and orchestrate lead import
+    timeout: 900  # 15 minutes
+    memorySize: 1024
+    events:
+      - s3:
+          bucket: auris-database-imports
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: uploads/
+            - suffix: .csv
+          existing: true
+      - s3:
+          bucket: auris-database-imports
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: uploads/
+            - suffix: .xlsx
+          existing: true
+    package:
+      patterns:
+        - src/functions/gl_database_import/**
+        - src/functions/gl_add_new_lead/**
+        - src/shared/**
+        - src/models/**
+    environment:
+      FUNCTION_NAME: gl_database_import_orchestrator
+      LEADS_TABLE: ${self:provider.stage}-auris-core-leads
+      IMPORT_STATUS_TABLE: ${self:provider.stage}-auris-core-import-status
+      AWS_REGION_NAME: ${self:provider.region}
+      OPERATIONS_QUEUE_URL:
+        Ref: OperationsQueue
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:Query
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads/index/*
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-import-status
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-import-status/index/*
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - s3:GetObject
+          - s3:PutObject
+          - s3:DeleteObject
+          - s3:CopyObject
+          - s3:HeadObject
+        Resource:
+          - arn:aws:s3:::auris-database-imports/*
+      - Effect: Allow
+        Action:
+          - s3:ListBucket
+        Resource:
+          - arn:aws:s3:::auris-database-imports
+      - Effect: Allow
+        Action:
+          - sqs:SendMessage
+          - sqs:SendMessageBatch
+        Resource:
+          - !GetAtt OperationsQueue.Arn
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_database_import:1
+
+  gl_database_import_status:
+    handler: src/functions/gl_database_import/gl_database_import_handler.get_import_status
+    description: Get database import status with timeout detection
+    timeout: 10
+    memorySize: 256
+    events:
+      - http:
+          path: database-import/status
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-api-key
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 3600
+      - http:
+          path: database-import/status
+          method: get
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-api-key
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 3600
+          private: true  # Require API key
+    package:
+      patterns:
+        - src/functions/gl_database_import/**
+        - src/shared/**
+        - src/models/**
+    environment:
+      FUNCTION_NAME: gl_database_import_status
+      IMPORT_STATUS_TABLE: ${self:provider.stage}-auris-core-import-status
+      LEADS_TABLE: ${self:provider.stage}-auris-core-leads
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:Query
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-import-status
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-leads/index/*
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - s3:GetObject
+        Resource:
+          - arn:aws:s3:::auris-database-imports/*
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_database_import:1
 
   gl_add_new_company:
     handler: src/functions/gl_add_new_company/add_new_company_handler.add_new_company
