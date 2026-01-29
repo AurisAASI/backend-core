@@ -127,7 +127,7 @@ def _map_history_entry(
     comm: Dict[str, Any], lead_details: Tuple[str, str, str]
 ) -> Dict[str, Any]:
     lead_name, status, source = lead_details
-    # Prefer updatedAt; fallback to communicationDate
+    # Prefer communicationDate; fallback to updatedAt
     communication_date = (
         comm.get('communicationDate')
         if comm.get('communicationDate')
