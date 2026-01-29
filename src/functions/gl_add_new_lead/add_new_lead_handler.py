@@ -244,16 +244,19 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Create initial communication history entry
         assigned_user = payload.get('assignedUser')
         source = payload.get('source')
-        initial_message = (
-            f'Lead criado via {source}. Status inicial: Aguardando contato'
+        status = (
+            payload.get('statusLead')
+            if payload.get('statusLead')
+            else 'Aguardando contato'
         )
+        initial_message = f'Lead criado via {source}. Status inicial: {status}.'
 
         comm_id = create_initial_communication(
             company_id=company_id,
             lead_id=lead_id,
             assigned_user=assigned_user,
             source=source,
-            status='Aguardando contato',
+            status=status,
             message=initial_message,
             communication_db=communication_db,
         )
@@ -271,8 +274,10 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         lead_data['phone'] = normalized_phone
         lead_data['city'] = payload.get('city')
         lead_data['allowsMarketing'] = payload.get('allowsMarketing', True)
-        lead_data['entryDate'] = current_timestamp
-        lead_data['statusLead'] = 'Aguardando contato'  # Default status
+        lead_data['entryDate'] = (
+            payload.get('entryDate') if payload.get('entryDate') else current_timestamp
+        )
+        lead_data['statusLead'] = status
         lead_data['source'] = payload.get('source')
         lead_data['createdAt'] = current_timestamp
         lead_data['updatedAt'] = current_timestamp
@@ -291,6 +296,8 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             lead_data['assignedUser'] = payload.get('assignedUser')
         if payload.get('statusClassification'):
             lead_data['statusClassification'] = payload.get('statusClassification')
+        if payload.get('importID'):
+            lead_data['importID'] = payload.get('importID')
 
         # Set initial communication history with the created communication ID
         lead_data['communicationHistoryIds'] = [comm_id]
