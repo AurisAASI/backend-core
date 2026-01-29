@@ -633,7 +633,7 @@ resources:
         ReceiveMessageWaitTimeSeconds: 0
         RedrivePolicy:
           deadLetterTargetArn: !GetAtt OperationsQueueDLQ.Arn
-          maxReceiveCount: 3  # After 3 failed attempts, move to DLQ
+          maxReceiveCount: 1  # After 1 failed attempt, move to DLQ
         Tags:
           - Key: Service
             Value: ${self:service}
@@ -661,7 +661,7 @@ resources:
         Statistic: Sum
         Period: 60
         EvaluationPeriods: 1
-        Threshold: 1
+        Threshold: 5
         ComparisonOperator: GreaterThanOrEqualToThreshold
         Dimensions:
           - Name: QueueName
