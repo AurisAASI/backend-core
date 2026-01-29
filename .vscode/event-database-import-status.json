@@ -1,0 +1,30 @@
+{
+  "resource": "/database-import/status",
+  "path": "/database-import/status",
+  "httpMethod": "GET",
+  "headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "x-api-key": "test-api-key"
+  },
+  "queryStringParameters": {
+    "importID": "import-ffcc6f4b-fb72-4d7d-9a4f-537f5314999b"
+  },
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "accountId": "123456789012",
+    "resourceId": "abc123",
+    "stage": "dev",
+    "requestId": "test-request-id",
+    "identity": {
+      "sourceIp": "127.0.0.1",
+      "userAgent": "PostmanRuntime/7.29.0"
+    },
+    "resourcePath": "/database-import/status",
+    "httpMethod": "GET",
+    "apiId": "test123"
+  },
+  "body": null,
+  "isBase64Encoded": false
+}

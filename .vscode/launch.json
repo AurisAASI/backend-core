@@ -130,6 +130,42 @@
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: database_import_generate_url",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "database_import_generate_url",
+                "-e", "${workspaceFolder}/.vscode/event-database-import-generate-url.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: database_import_orchestrator",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "database_import_orchestrator",
+                "-e", "${workspaceFolder}/.vscode/event-database-import-orchestrator.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: database_import_status",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "database_import_status",
+                "-e", "${workspaceFolder}/.vscode/event-database-import-status.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

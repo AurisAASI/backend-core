@@ -15,6 +15,11 @@ from src.functions.gl_fetch_leads.fetch_leads_handler import fetch_leads_reminde
 from src.functions.gl_fetch_lead_history.fetch_lead_history_handler import fetch_lead_history
 from src.functions.gl_queue_manager.gl_queue_manager_handler import gl_queue_manager
 from src.functions.gl_communication_registration.gl_communication_registration_handler import communication_registration
+from src.functions.gl_database_import.gl_database_import_handler import (
+    generate_presigned_upload_url,
+    database_import_orchestrator,
+    get_import_status,
+)
 
 
 # Available lambda functions
@@ -29,6 +34,9 @@ LAMBDA_FUNCTIONS = {
     'fetch_lead_history': fetch_lead_history,
     'gl_queue_manager': gl_queue_manager,
     'communication_registration': communication_registration,
+    'database_import_generate_url': generate_presigned_upload_url,
+    'database_import_orchestrator': database_import_orchestrator,
+    'database_import_status': get_import_status,
 }
 
 

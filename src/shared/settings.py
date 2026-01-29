@@ -60,6 +60,14 @@ class Settings:
             f'{self.stage}-auris-core-communication-history',
         )
 
+    @property
+    def import_status_table_name(self) -> str:
+        """Get the import status DynamoDB table name for current stage."""
+        return os.environ.get(
+            'IMPORT_STATUS_TABLE',
+            f'{self.stage}-auris-core-import-status',
+        )
+
     def get_table_name(
         self, table_type: Literal['companies', 'places', 'leads', 'leads']
     ) -> str:
