@@ -1,0 +1,21 @@
+fullName,phone,email,city,allowsMarketing,entryDate,statusLead,statusClassification,source,audiologist,reminderDate
+Maria Silva Santos,11987654321,maria.silva@email.com,São Paulo,true,2026-01-15,Novo,Quente,Facebook Ads,Dr. João Pereira,2026-02-01
+João Pedro Oliveira,21976543210,joao.oliveira@email.com,Rio de Janeiro,true,2026-01-16,Contato Inicial,Morno,Google Ads,Dra. Ana Costa,2026-02-02
+Ana Carolina Costa,11965432109,ana.costa@email.com,São Paulo,false,2026-01-17,Agendado,Quente,Indicação,,2026-01-25
+Carlos Eduardo Lima,85954321098,carlos.lima@email.com,Fortaleza,true,2026-01-18,Qualificado,Frio,Site Orgânico,Dr. Pedro Santos,2026-02-05
+Fernanda Souza Rocha,47943210987,fernanda.souza@email.com,Florianópolis,true,2026-01-19,Novo,Quente,Instagram,Dra. Maria Oliveira,2026-01-28
+Ricardo Alves Pereira,11932109876,ricardo.alves@email.com,Campinas,false,2026-01-20,Em Atendimento,Quente,WhatsApp,,2026-01-30
+Juliana Ferreira Costa,71921098765,juliana.ferreira@email.com,Salvador,true,2026-01-21,Novo,Morno,Facebook Ads,Dr. Carlos Mendes,2026-02-10
+Paulo Roberto Silva,48910987654,paulo.roberto@email.com,Curitiba,true,2026-01-22,Contato Inicial,Quente,Indicação,Dra. Beatriz Lima,2026-02-03
+Mariana Santos Lima,11909876543,mariana.santos@email.com,São Paulo,true,2026-01-23,Agendado,Quente,Google Ads,,2026-01-29
+Gabriel Oliveira Rocha,81898765432,gabriel.oliveira@email.com,Recife,false,2026-01-24,Novo,Frio,Site Orgânico,Dr. Fernando Souza,2026-02-15
+Beatriz Costa Santos,31887654321,beatriz.costa@email.com,Belo Horizonte,true,2026-01-25,Qualificado,Morno,Instagram,Dra. Juliana Rocha,2026-02-08
+Leonardo Silva Alves,11876543210,leonardo.silva@email.com,São Paulo,true,2026-01-26,Novo,Quente,WhatsApp,,2026-02-01
+Camila Rodrigues Lima,61865432109,camila.rodrigues@email.com,Brasília,true,2026-01-27,Contato Inicial,Quente,Facebook Ads,Dr. Gabriel Costa,2026-02-04
+Rafael Santos Costa,51854321098,rafael.santos@email.com,Porto Alegre,false,2026-01-28,Novo,Morno,Indicação,Dra. Camila Silva,2026-02-12
+Patricia Oliveira Souza,11843210987,patricia.oliveira@email.com,São Paulo,true,2026-01-15,Agendado,Quente,Google Ads,,2026-01-31
+Marcos Paulo Lima,27832109876,marcos.paulo@email.com,Vitória,true,2026-01-16,Novo,Frio,Site Orgânico,Dr. Rafael Oliveira,2026-02-20
+Amanda Silva Costa,11821098765,amanda.silva@email.com,Guarulhos,true,2026-01-17,Qualificado,Quente,Instagram,Dra. Patricia Lima,2026-02-06
+Felipe Rodrigues Santos,19810987654,felipe.rodrigues@email.com,Campinas,false,2026-01-18,Novo,Morno,WhatsApp,,2026-02-09
+Luciana Costa Alves,11809876543,luciana.costa@email.com,São Paulo,true,2026-01-19,Contato Inicial,Quente,Facebook Ads,Dr. Marcos Silva,2026-02-07
+Daniel Souza Lima,41798765432,daniel.souza@email.com,Curitiba,true,2026-01-20,Novo,Quente,Indicação,Dra. Amanda Costa,2026-02-11
