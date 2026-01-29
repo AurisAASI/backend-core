@@ -1,0 +1,28 @@
+{
+  "resource": "/database-import/generate-upload-url",
+  "path": "/database-import/generate-upload-url",
+  "httpMethod": "POST",
+  "headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "x-api-key": "test-api-key"
+  },
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "accountId": "123456789012",
+    "resourceId": "abc123",
+    "stage": "dev",
+    "requestId": "test-request-id",
+    "identity": {
+      "sourceIp": "127.0.0.1",
+      "userAgent": "PostmanRuntime/7.29.0"
+    },
+    "resourcePath": "/database-import/generate-upload-url",
+    "httpMethod": "POST",
+    "apiId": "test123"
+  },
+  "body": "{\"fileName\": \"leads-import.csv\", \"fileSize\": 2048000, \"fileType\": \"text/csv\", \"companyID\": \"896504cc-bd92-448b-bc92-74bfcd2c73c2\", \"userEmail\": \"antonio.filho@auditik.com.br\", \"assignedUser\": \"user-5c3cd1a7-be37-4af6-bd20-785130bc9ce9\"}",
+  "isBase64Encoded": false
+}

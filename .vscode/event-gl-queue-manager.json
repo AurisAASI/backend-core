@@ -3,7 +3,7 @@
     {
       "messageId": "test-message-id-001",
       "receiptHandle": "test-receipt-handle-001",
-      "body": "{\"operationType\": \"communication_registration\", \"payload\": {\"leadId\": \"lead-98941e76-2173-4497-9f63-ba44899f47a4\", \"message\": \"Hello from queue manager\"}, \"timestamp\": \"2026-01-21T10:00:00.000Z\", \"userEmail\": \"antonio.filho@auditik.com.br\", \"companyID\": \"896504cc-bd92-448b-bc92-74bfcd2c73c2\"}"
+      "body": "{\"operationType\": \"add_new_lead\", \"payload\": {\"leadId\": \"lead-98941e76-2173-4497-9f63-ba44899f47a4\", \"message\": \"Hello from queue manager\"}, \"timestamp\": \"2026-01-21T10:00:00.000Z\", \"userEmail\": \"antonio.filho@auditik.com.br\", \"companyID\": \"896504cc-bd92-448b-bc92-74bfcd2c73c2\"}"
     }
   ]
 }
