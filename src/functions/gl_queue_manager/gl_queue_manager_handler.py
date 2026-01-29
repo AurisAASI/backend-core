@@ -16,6 +16,8 @@ logger = Logger(service='gl-queue-manager')
 # Mapping of operationType to target Lambda function names
 # This will be expanded based on actual requirements
 OPERATION_TYPE_MAPPING: Dict[str, str] = {
+    'database_import': 'gl_database_import',  # Lambda function name
+    'add_new_lead': 'gl-add-new-lead',  # Lambda function name (custom naming)
     'communication_registration': 'gl_communication_registration',  # Lambda function name
 }
 
@@ -33,18 +35,19 @@ def gl_queue_manager(event, context):
         "Records": [
             {
                 "messageId": "...",
-                "body": "{\"operationType\": \"communication_registration\", \"payload\": {...}, ...}"  // JSON STRING
+                "body": "{\"operationType\": \"database_import\", \"payload\": {...}, ...}"  // JSON STRING
             }
         ]
     }
 
     Message Body Structure (after JSON.parse of event.Records[0].body):
     {
-        "operationType": "communication_registration",  // Required: operation type to route
+        "operationType": "database_import",  // Required: operation type to route
         "payload": { ... },                              // Required: operation-specific data
         "userEmail": "user@example.com",                 // Required: user who initiated
         "companyID": "company-123"                       // Required: associated company
         "timestamp": "2026-01-21T10:00:00.000Z",        // Optional: operation timestamp
+        "invocationType": "RequestResponse"             // Optional: Lambda invocation type (RequestResponse|Event)
     }
 
     Args:
@@ -54,8 +57,6 @@ def gl_queue_manager(event, context):
     Returns:
         Dict with success status (200) or error status
     """
-
-    # TODO: RETIRADO O SERVIÇO COMMUNCATION_REGISTRATION PARA SER DIRETO COM API GATEWAY. DEIXEI ESSA FILA AQUI PARA PODER INCLUIR OUTROS SERVIÇOS DEPOIS (REPORTS, ETC)
     logger.info(f'Processing SQS event: {json.dumps(event)}')
 
     try:
@@ -93,11 +94,14 @@ def gl_queue_manager(event, context):
         user_email = payload.get('userEmail', '').strip()
         company_id = payload.get('companyID', '').strip()
         timestamp = payload.get('timestamp', '')
+        invocation_type = payload.get('invocationType', 'RequestResponse').strip()
 
-        # Validate operationType and payload
+        # Validate operationType, payload, and invocationType
         try:
             _validate_operation_type(operation_type)
+            # TODO Adicionar validacoes especificas por operationType porque nao esta fazendo nada no momento (ver o schema e aplicar regras)
             _validate_payload_by_operation_type(operation_type, operation_payload)
+            _validate_invocation_type(invocation_type)
         except ValueError as e:
             return response(
                 status_code=HTTPStatus.BAD_REQUEST, message={'error': str(e)}
@@ -110,32 +114,68 @@ def gl_queue_manager(event, context):
         region = os.environ.get('AWS_REGION_NAME', settings.region)
         lambda_client = boto3.client('lambda', region_name=region)
 
-        # Construct enriched payload for target Lambda
-        enriched_payload = {
-            'payload': operation_payload,
-            'metadata': {
-                'userEmail': user_email,
-                'companyID': company_id,
-                'operationType': operation_type,
-                'timestamp': timestamp,
-            },
-        }
-
         logger.info(
-            f'Invoking Lambda function {target_function_name} for operation {operation_type}'
+            f'Invoking Lambda function {target_function_name} for operation {operation_type} '
+            f'with InvocationType: {invocation_type}'
         )
 
-        # Invoke target Lambda function synchronously
+        #################################################################
+        # Invoke target Lambda function with specified invocation type
+        #################################################################
         try:
+            # Construct enriched payload for target Lambda
+            # TODO Fazer uma funcao auxiliar para montar o enriched_payload para a lambda alvo, isso depende de caso a caso
+            enriched_payload = {
+                'body': {
+                    **operation_payload,
+                    'userEmail': user_email,
+                    'companyID': company_id,
+                    'operationType': operation_type,
+                    'timestamp': timestamp,
+                },
+            }
             lambda_response = lambda_client.invoke(
                 FunctionName=target_function_name,
-                InvocationType='RequestResponse',  # Synchronous invocation
+                InvocationType=invocation_type,
                 Payload=json.dumps(enriched_payload),
             )
 
-            # Read and parse Lambda response
-            response_payload = json.loads(lambda_response['Payload'].read())
             status_code = lambda_response['StatusCode']
+
+            # Handle response based on invocation type
+            if invocation_type == 'RequestResponse':
+                # Synchronous invocation - read and parse response payload
+                response_payload = json.loads(lambda_response['Payload'].read())
+                logger.info(
+                    f'Successfully invoked Lambda {target_function_name} (sync). '
+                    f'Status: {status_code}, Response: {response_payload}'
+                )
+                return response(
+                    status_code=HTTPStatus.OK,
+                    message={
+                        'message': 'Operation executed successfully',
+                        'operationType': operation_type,
+                        'invocationType': invocation_type,
+                        'lambdaStatusCode': status_code,
+                        'result': response_payload,
+                    },
+                )
+            else:
+                # Asynchronous invocation (Event) - no response payload
+                logger.info(
+                    f'Successfully invoked Lambda {target_function_name} (async). '
+                    f'Status: {status_code}'
+                )
+                return response(
+                    status_code=HTTPStatus.ACCEPTED,
+                    message={
+                        'message': 'Operation initiated successfully (async)',
+                        'operationType': operation_type,
+                        'invocationType': invocation_type,
+                        'lambdaStatusCode': status_code,
+                        'requestId': lambda_response['ResponseMetadata']['RequestId'],
+                    },
+                )
         except Exception as e:
             error_msg = f'Error invoking Lambda {target_function_name}: {str(e)}'
             logger.error(error_msg)
@@ -143,22 +183,6 @@ def gl_queue_manager(event, context):
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
                 message={'error': error_msg},
             )
-
-        logger.info(
-            f'Successfully invoked Lambda {target_function_name}. '
-            f'Status: {status_code}, Response: {response_payload}'
-        )
-
-        # Return Lambda invocation result
-        return response(
-            status_code=HTTPStatus.OK,
-            message={
-                'message': 'Operation executed successfully',
-                'operationType': operation_type,
-                'lambdaStatusCode': status_code,
-                'result': response_payload,
-            },
-        )
 
     except Exception as e:
         error_msg = f'Unexpected error processing operation: {str(e)}'
@@ -215,3 +239,22 @@ def _validate_payload_by_operation_type(operation_type: str, payload: Any) -> No
     #         logger.error(error_msg)
     #         raise ValueError(error_msg)
     #     # Further field validations can be added here
+
+
+def _validate_invocation_type(invocation_type: str) -> None:
+    """Validate the invocationType field.
+
+    Args:
+        invocation_type (str): The invocation type to validate.
+
+    Raises:
+        ValueError: If invocationType is invalid.
+    """
+    valid_types = ['RequestResponse', 'Event']
+    if invocation_type not in valid_types:
+        error_msg = (
+            f'Invalid invocationType: {invocation_type}. '
+            f'Supported types: {valid_types}'
+        )
+        logger.error(error_msg)
+        raise ValueError(error_msg)
