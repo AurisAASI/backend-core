@@ -1,0 +1,28 @@
+{
+  "resource": "/companies",
+  "path": "/companies",
+  "httpMethod": "POST",
+  "headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "x-api-key": "test-api-key"
+  },
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "accountId": "123456789012",
+    "resourceId": "abc123",
+    "stage": "dev",
+    "requestId": "test-request-id",
+    "identity": {
+      "sourceIp": "127.0.0.1",
+      "userAgent": "PostmanRuntime/7.29.0"
+    },
+    "resourcePath": "/companies",
+    "httpMethod": "POST",
+    "apiId": "test123"
+  },
+  "body": "{\"name\": \"Clínica Auditiva São Paulo\", \"city\": \"São Paulo\", \"state\": \"SP\", \"niche\": \"Audiologia\", \"users\": [{\"user_name\": \"João Silva\", \"job\": \"Gerente\", \"status\": \"ativo\", \"permission\": \"admin\"}, {\"user_name\": \"Maria Santos\", \"job\": \"Fonoaudióloga\", \"status\": \"ativo\", \"permission\": \"usuario\"}]}",
+  "isBase64Encoded": false
+}

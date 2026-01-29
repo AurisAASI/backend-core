@@ -1,7 +1,9 @@
 # Production dependencies only
-auris_tools==0.1.1
+auris_tools==0.2.0
 pydantic==2.3.0
 aws-lambda-powertools==2.20.0
 requests==2.32.5
 python-dotenv==1.0.0
 beautifulsoup4==4.12.3
+pandas==2.3.0
+openpyxl==3.1.2

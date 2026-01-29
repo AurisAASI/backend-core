@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "test-message-123",
+      "body": "{\"city\": \"Piracicaba\", \"state\": \"SP\", \"niche\": \"aasi\"}"
+    }
+  ]
+}

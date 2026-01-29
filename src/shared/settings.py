@@ -60,6 +60,14 @@ class Settings:
             f'{self.stage}-auris-core-communication-history',
         )
 
+    @property
+    def import_status_table_name(self) -> str:
+        """Get the import status DynamoDB table name for current stage."""
+        return os.environ.get(
+            'IMPORT_STATUS_TABLE',
+            f'{self.stage}-auris-core-import-status',
+        )
+
     def get_table_name(
         self, table_type: Literal['companies', 'places', 'leads', 'leads']
     ) -> str:
@@ -116,6 +124,16 @@ class Settings:
     def company_federal_scraper_task_queue_name(self) -> str:
         """Get the company federal scraper task queue name for current stage."""
         return f'backend-core-{self.stage}-company-federal-scraper-tasks'
+
+    @property
+    def operations_queue_url(self) -> str:
+        """Get the operations queue URL for hub lambda routing."""
+        return os.environ.get('OPERATIONS_QUEUE_URL', '')
+
+    @property
+    def operations_queue_name(self) -> str:
+        """Get the operations queue name for current stage."""
+        return f'backend-core-{self.stage}-gl-operations-queue'
 
     # Google Places API Configuration
     @property

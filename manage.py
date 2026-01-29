@@ -11,6 +11,15 @@ from src.functions.data_scrapper.website_handler import website_scrapper
 from src.functions.data_scrapper.company_federal_handler import company_federal_scrapper
 from src.functions.gl_add_new_lead.add_new_lead_handler import add_new_lead
 from src.functions.gl_add_new_company.add_new_company_handler import add_new_company
+from src.functions.gl_fetch_leads.fetch_leads_handler import fetch_leads_reminders
+from src.functions.gl_fetch_lead_history.fetch_lead_history_handler import fetch_lead_history
+from src.functions.gl_queue_manager.gl_queue_manager_handler import gl_queue_manager
+from src.functions.gl_communication_registration.gl_communication_registration_handler import communication_registration
+from src.functions.gl_database_import.gl_database_import_handler import (
+    generate_presigned_upload_url,
+    database_import_orchestrator,
+    get_import_status,
+)
 
 
 # Available lambda functions
@@ -21,6 +30,13 @@ LAMBDA_FUNCTIONS = {
     'company_federal': company_federal_scrapper,
     'add_new_lead': add_new_lead,
     'add_new_company': add_new_company,
+    'fetch_leads': fetch_leads_reminders,
+    'fetch_lead_history': fetch_lead_history,
+    'gl_queue_manager': gl_queue_manager,
+    'communication_registration': communication_registration,
+    'database_import_generate_url': generate_presigned_upload_url,
+    'database_import_orchestrator': database_import_orchestrator,
+    'database_import_status': get_import_status,
 }
 
 

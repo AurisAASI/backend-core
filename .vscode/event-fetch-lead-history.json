@@ -1,0 +1,24 @@
+{
+  "httpMethod": "POST",
+  "path": "/leads/fetch_history",
+  "headers": {
+    "Content-Type": "application/json",
+    "x-api-key": "test-api-key"
+  },
+  "body": "{\"companyID\": \"896504cc-bd92-448b-bc92-74bfcd2c73c2\", \"communicationIDs\": [\"comm-b1316183-877a-4bd5-8a22-ca9d7a2aeb89\"], \"userEmail\": \"antonio.filho@auditik.com.br\"}",
+  "requestContext": {
+    "identity": {
+      "sourceIp": "127.0.0.1"
+    },
+    "requestId": "test-request-id",
+    "stage": "dev",
+    "requestTime": "21/Jan/2026:12:00:00 +0000",
+    "protocol": "HTTP/1.1",
+    "resourcePath": "/leads/fetch_history",
+    "resourceId": "test-resource-id",
+    "accountId": "819774487459",
+    "apiId": "test-api-id",
+    "authorizer": {}
+  },
+  "isBase64Encoded": false
+}
