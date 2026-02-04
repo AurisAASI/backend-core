@@ -110,7 +110,9 @@ def _parse_authorization_header(event: Dict[str, Any]) -> Optional[str]:
     headers = event.get('headers', {})
     auth_header = headers.get('Authorization') or headers.get('authorization')
     if auth_header:
-        logger.info('Authorization header present (validation deferred to Cognito integration)')
+        logger.info(
+            'Authorization header present (validation deferred to Cognito integration)'
+        )
     return auth_header
 
 
@@ -137,7 +139,9 @@ def _validate_jwt_token(token: str) -> Dict[str, Any]:
         ValueError: If token is invalid or expired
     """
     # TODO-COGNITO: Implement actual JWT validation here
-    logger.warning('JWT token validation not yet implemented (Cognito integration pending)')
+    logger.warning(
+        'JWT token validation not yet implemented (Cognito integration pending)'
+    )
     return {}
 
 
@@ -165,7 +169,9 @@ def find_user_by_email(
         logger.info(f'Searching for user with email: {email} in company: {company_id}')
 
         # Fetch the company record
-        company_response = companies_db._deserialize_item(companies_db.get_item(key={'companyID': company_id}))
+        company_response = companies_db._deserialize_item(
+            companies_db.get_item(key={'companyID': company_id})
+        )
 
         if not company_response:
             logger.warning(f'Company not found: {company_id}')
@@ -174,13 +180,18 @@ def find_user_by_email(
         # Extract users list from company record
         users = company_response.get('users', [])
         if not isinstance(users, list):
-            logger.error(f'Invalid users structure in company {company_id} - users: {users}')
+            logger.error(
+                f'Invalid users structure in company {company_id} - users: {users}'
+            )
             return None
 
         # Search for user with matching email
         for users_list in users:
             for user in users_list:
-                if isinstance(user, dict) and user.get('user_email', '').lower() == email.lower():
+                if (
+                    isinstance(user, dict)
+                    and user.get('user_email', '').lower() == email.lower()
+                ):
                     logger.info(f'User found with email: {email}')
                     return {**user, 'companyID': company_id}
 
