@@ -132,6 +132,66 @@
             "cwd": "${workspaceFolder}"
         },
         {
+            "name": "Lambda: login - Success",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "login",
+                "-e", "${workspaceFolder}/.vscode/event-login-success.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: login - Invalid Email",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "login",
+                "-e", "${workspaceFolder}/.vscode/event-login-invalid-email.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: login - Missing Email",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "login",
+                "-e", "${workspaceFolder}/.vscode/event-login-missing-email.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: login - User Not Found",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "login",
+                "-e", "${workspaceFolder}/.vscode/event-login-user-not-found.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: login - Preflight",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "login",
+                "-e", "${workspaceFolder}/.vscode/event-login-preflight.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
             "name": "Lambda: database_import_generate_url",
             "type": "debugpy",
             "request": "launch",
