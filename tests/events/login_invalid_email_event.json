@@ -1,9 +1,0 @@
-{
-  "httpMethod": "POST",
-  "path": "/login",
-  "headers": {
-    "Content-Type": "application/json",
-    "x-api-key": "test-api-key"
-  },
-  "body": "{\"email\": \"invalid-email-format\"}"
-}
