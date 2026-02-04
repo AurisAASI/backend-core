@@ -515,6 +515,43 @@ functions:
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
+  gl_login:
+    handler: src/functions/gl_login/login_handler.login
+    description: HTTP endpoint for user authentication via email lookup
+    timeout: 29
+    memorySize: 256
+    events:
+      - http:
+          path: login
+          method: post
+          cors: true
+          private: true  # Require API key
+      - http:
+          path: login
+          method: options
+          cors: true
+    package:
+      patterns:
+        - src/functions/gl_login/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: gl_login
+      COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      AWS_REGION_NAME: ${self:provider.region}
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-companies
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_login:1
+
   gl_fetch_leads:
     handler: src/functions/gl_fetch_leads/fetch_leads_handler.fetch_leads_reminders
     description: HTTP endpoint for fetching lead based on reminders date and company ID
