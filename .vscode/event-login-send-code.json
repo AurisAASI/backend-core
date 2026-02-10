@@ -1,0 +1,9 @@
+{
+  "httpMethod": "POST",
+  "path": "/login",
+  "headers": {
+    "Content-Type": "application/json",
+    "x-api-key": "test-api-key"
+  },
+  "body": "{\"stage\": \"sendCode\", \"email\": \"antonio.filho@auditik.com.br\", \"rememberMe\": false}"
+}

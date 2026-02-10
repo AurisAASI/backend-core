@@ -1,0 +1,9 @@
+{
+  "httpMethod": "POST",
+  "path": "/login",
+  "headers": {
+    "Content-Type": "application/json",
+    "x-api-key": "test-api-key"
+  },
+  "body": "{\"stage\": \"verifyCode\", \"email\": \"antonio.filho@auditik.com.br\", \"shortCode\": \"123456\", \"challengeId\": \"challenge-550e8400-e29b-41d4-a716-446655440000\", \"rememberMe\": true}"
+}

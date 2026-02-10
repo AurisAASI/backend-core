@@ -10,7 +10,9 @@
     "offline": "serverless offline start",
     "test": "pytest tests --cov=src --cov-report=html --verbose",
     "format": "black src tests && isort src tests && flake8 src tests",
-    "format:check": "black --check src tests && isort --check-only src tests && flake8 src tests"
+    "format:check": "black --check src tests && isort --check-only src tests && flake8 src tests",
+    "setup:jwt:dev": "python scripts/setup_jwt_secret.py --stage dev",
+    "setup:jwt:prod": "python scripts/setup_jwt_secret.py --stage prod"
   },
   "devDependencies": {
     "serverless": "^4.0.0",

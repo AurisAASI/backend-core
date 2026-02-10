@@ -11,6 +11,8 @@ provider:
   region: ${opt:region, 'us-east-1'}
   memorySize: 128
   timeout: 30
+  deploymentBucket:
+    maxPreviousDeploymentArtifacts: 10
   environment:
     # Global environment variables
     ACCOUNT_ID: ${env:AWS_ACCOUNT_ID, '819774487459'}
@@ -46,6 +48,11 @@ provider:
             - logs:CreateLogStream
             - logs:PutLogEvents
           Resource: "arn:aws:logs:*:*:*"
+        # Secrets Manager permissions for JWT secret
+        - Effect: Allow
+          Action:
+            - secretsmanager:GetSecretValue
+          Resource: "arn:aws:secretsmanager:${self:provider.region}:${env:AWS_ACCOUNT_ID}:secret:${self:provider.stage}-auris-jwt-secret-*"
 
 package:
   individually: true
@@ -709,6 +716,40 @@ resources:
   Resources:
     # DynamoDB Tables are managed externally (already exist)
     # Tables: ${self:provider.stage}-auris-core-companies, ${self:provider.stage}-auris-core-places
+
+    # AWS Secrets Manager - JWT Secret Key
+    JWTSecretKey:
+      Type: AWS::SecretsManager::Secret
+      Properties:
+        Name: ${self:provider.stage}-auris-jwt-secret
+        Description: JWT secret key for token signing and validation (rotates every 6 months)
+        GenerateSecretString:
+          SecretStringTemplate: '{}'
+          GenerateStringKey: jwt_secret_key
+          PasswordLength: 64
+          ExcludeCharacters: '"@\\'
+          RequireEachIncludedType: true
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: ManagedBy
+            Value: Serverless
+          - Key: RotationSchedule
+            Value: Every 6 months (180 days)
+
+    # Note: Automatic rotation for JWT secrets requires a custom Lambda function
+    # For now, rotation must be done manually using the setup script:
+    # npm run setup:jwt:dev --regenerate (every 6 months)
+    # npm run setup:jwt:prod --regenerate (every 6 months)
+    # 
+    # To enable automatic rotation, you would need to:
+    # 1. Create a custom rotation Lambda function
+    # 2. Add AWS::SecretsManager::RotationSchedule resource
+    # 3. Configure the rotation Lambda to regenerate the JWT secret
+    # 
+    # For security compliance, set a calendar reminder to manually rotate every 6 months
 
     # SQS Queues
     ScraperTaskQueue:

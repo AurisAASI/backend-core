@@ -68,6 +68,14 @@ class Settings:
             f'{self.stage}-auris-core-import-status',
         )
 
+    @property
+    def auth_codes_table_name(self) -> str:
+        """Get the authentication codes DynamoDB table name for current stage."""
+        return os.environ.get(
+            'AUTH_CODES_TABLE',
+            f'{self.stage}-auris-auth-codes',
+        )
+
     def get_table_name(
         self, table_type: Literal['companies', 'places', 'leads', 'leads']
     ) -> str:
@@ -191,6 +199,117 @@ class Settings:
             raise ValueError(f'Missing required environment variable: {env_key}')
 
         return api_key
+
+    # AWS Cognito Configuration
+    @property
+    def cognito_user_pool_id(self) -> str:
+        """
+        Get the Cognito User Pool ID for current stage.
+
+        Returns:
+            User Pool ID for the current environment (dev or prod)
+        """
+        env_key = f'COGNITO_USER_POOL_ID_{self.stage.upper()}'
+        pool_id = os.environ.get(env_key, '')
+
+        if not pool_id:
+            raise ValueError(f'Missing required environment variable: {env_key}')
+
+        return pool_id
+
+    # AWS SES Configuration
+    @property
+    def ses_from_email(self) -> str:
+        """
+        Get the SES from email address for current stage.
+
+        Returns:
+            SES email address for the current environment
+        """
+        env_key = f'SES_FROM_EMAIL_{self.stage.upper()}'
+        from_email = os.environ.get(env_key, '')
+
+        if not from_email:
+            raise ValueError(f'Missing required environment variable: {env_key}')
+
+        return from_email
+
+    # JWT Configuration
+    @property
+    def jwt_secret_key(self) -> str:
+        """
+        Get the JWT secret key for token signing from AWS Secrets Manager.
+
+        Returns:
+            JWT secret key for token generation and validation
+        """
+        import boto3
+        import json
+        from botocore.exceptions import ClientError
+
+        # Try to get from environment first (for local development)
+        secret_key = os.environ.get('JWT_SECRET_KEY', '')
+        if secret_key:
+            return secret_key
+
+        # Fetch from AWS Secrets Manager
+        secret_name = f'{self.stage}-auris-jwt-secret'
+        region_name = self.region
+
+        # Create a Secrets Manager client
+        session = boto3.session.Session()
+        client = session.client(
+            service_name='secretsmanager',
+            region_name=region_name
+        )
+
+        try:
+            get_secret_value_response = client.get_secret_value(
+                SecretId=secret_name
+            )
+        except ClientError as e:
+            raise ValueError(f'Failed to retrieve JWT secret from Secrets Manager: {str(e)}')
+
+        # Secrets Manager returns the secret as a JSON string
+        if 'SecretString' in get_secret_value_response:
+            secret = get_secret_value_response['SecretString']
+            # Try to parse as JSON first
+            try:
+                secret_dict = json.loads(secret)
+                return secret_dict.get('jwt_secret_key', secret)
+            except json.JSONDecodeError:
+                # If not JSON, return the plain string
+                return secret
+        else:
+            raise ValueError('JWT secret key not found in Secrets Manager')
+
+        return secret_key
+
+    @property
+    def jwt_access_token_expiry_hours(self) -> int:
+        """Get the JWT access token expiry in hours."""
+        return int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRY_HOURS', '8'))
+
+    @property
+    def jwt_refresh_token_expiry_days(self) -> int:
+        """Get the JWT refresh token expiry in days."""
+        return int(os.environ.get('JWT_REFRESH_TOKEN_EXPIRY_DAYS', '30'))
+
+    # Authentication Configuration
+    @property
+    def auth_code_validity_minutes(self) -> int:
+        """Get the authentication code validity period in minutes."""
+        return int(os.environ.get('AUTH_CODE_VALIDITY_MINUTES', '5'))
+
+    @property
+    def auth_code_max_attempts(self) -> int:
+        """Get the maximum number of code verification attempts."""
+        return int(os.environ.get('AUTH_CODE_MAX_ATTEMPTS', '3'))
+
+    @property
+    def auth_code_length(self) -> int:
+        """Get the authentication code length."""
+        return int(os.environ.get('AUTH_CODE_LENGTH', '6'))
 
     # Helper Methods
     def get_resource_name(
