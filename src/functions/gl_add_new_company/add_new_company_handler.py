@@ -339,7 +339,7 @@ def add_new_company(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info('No duplicate company found, proceeding with creation')
 
         # Generate unique companyID
-        company_id = str(uuid.uuid4())
+        company_id = 'company-'+str(uuid.uuid4())
         logger.info(f'Generated companyID: {company_id}')
 
         # Build company data using schema template
