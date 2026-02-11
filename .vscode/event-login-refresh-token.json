@@ -5,5 +5,5 @@
     "Content-Type": "application/json",
     "x-api-key": "test-api-key"
   },
-  "body": "{\"stage\": \"refresh\", \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImFudG9uaW8uZmlsaG9AYXVkaXRpay5jb20uYnIiLCJ1c2VySWQiOiJ1c3JfNTUwZTg0MDBlMjliNDFkNGE3MTY0NDY2NTU0NDAwMDAiLCJjb21wYW55SWQiOiI4OTY1MDRjYy1iZDkyLTQ0OGItYmM5Mi03NGJmY2QyYzczYzIiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6IjIwMjYtMDItMDlUMDQ6MTU6MDAuMDAwMDAwIiwiZXhwIjoiMjAyNi0wMy0xMVQwNDoxNTowMC4wMDAwMDAifQ.test_signature\", \"email\": \"antonio.filho@auditik.com.br\", \"userId\": \"user-5c3cd1a7-be37-4af6-bd20-785130bc9ce9\", \"companyId\": \"896504cc-bd92-448b-bc92-74bfcd2c73c2\"}"
+  "body": "{\"stage\": \"refresh\", \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImFudG9uaW8uZmlsaG9AYXVkaXRpay5jb20uYnIiLCJ1c2VySWQiOiJ1c2VyLTVjM2NkMWE3LWJlMzctNGFmNi1iZDIwLTc4NTEzMGJjOWNlOSIsImNvbXBhbnlJZCI6Ijg5NjUwNGNjLWJkOTItNDQ4Yi1iYzkyLTc0YmZjZDJjNzNjMiIsInR5cGUiOiJyZWZyZXNoIiwiaWF0IjoxNzcwODMxNTk5LCJleHAiOjE3NzM0MjM1OTl9.M8uPxkISUZA1c8YQgP_cisQdNudv72EWw5tAea-YpCE\", \"email\": \"antonio.filho@auditik.com.br\", \"userId\": \"user-5c3cd1a7-be37-4af6-bd20-785130bc9ce9\", \"companyId\": \"896504cc-bd92-448b-bc92-74bfcd2c73c2\"}"
 }

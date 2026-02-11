@@ -76,6 +76,7 @@ class Settings:
             f'{self.stage}-auris-auth-codes',
         )
 
+    # TODO Vericicar a chamada dessa função aqui que elenca as tabelas... talvez está em desuso e possa ser removida
     def get_table_name(
         self, table_type: Literal['companies', 'places', 'leads', 'leads']
     ) -> str:
