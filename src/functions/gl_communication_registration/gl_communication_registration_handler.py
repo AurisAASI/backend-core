@@ -339,7 +339,7 @@ def _update_lead_and_communication(
         'updatedAt': updated_at,
     }
     leads_db.update_item(
-        key=lead_id,
+        key={'leadID': lead_id},
         primary_key='leadID',
         updates=input_updates,
     )

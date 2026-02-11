@@ -376,6 +376,7 @@ def database_import_orchestrator(event: Dict[str, Any], context: Any) -> Dict[st
         import_db.update_item(
             key={'importID': import_id},
             updates={'status': 'processing', 'updatedAt': current_timestamp},
+            primary_key='importID',
         )
 
         logger.info(f'Status atualizado para processing: {import_id}')
@@ -467,6 +468,7 @@ def database_import_orchestrator(event: Dict[str, Any], context: Any) -> Dict[st
                 'duplicateCount': duplicate_count,
                 'updatedAt': completion_timestamp,
             },
+            primary_key='importID',
         )
 
         logger.info(f'Importação concluída com sucesso: {import_id}')
@@ -501,6 +503,7 @@ def database_import_orchestrator(event: Dict[str, Any], context: Any) -> Dict[st
                         'errorMessage': str(e),
                         'updatedAt': datetime.now(timezone.utc).isoformat(),
                     },
+                    primary_key='importID',
                 )
 
                 # Move file to failed folder
@@ -572,7 +575,11 @@ def _parse_and_validate_file(
     logger.info(f'Linhas lidas: {row_count}')
 
     # Update total rows in DynamoDB
-    import_db.update_item(key={'importID': import_id}, updates={'totalRows': row_count})
+    import_db.update_item(
+        key={'importID': import_id},
+        updates={'totalRows': row_count},
+        primary_key='importID',
+    )
 
     # Validate required columns
     missing_columns = [col for col in REQUIRED_COLUMNS if col not in df.columns]
@@ -881,6 +888,7 @@ def _process_leads_async(
                         'queuedCount': total_queued,
                         'updatedAt': datetime.now(timezone.utc).isoformat(),
                     },
+                    primary_key='importID',
                 )
             except Exception as e:
                 logger.warning(f'Erro ao atualizar progresso: {str(e)}')
@@ -1057,6 +1065,7 @@ def get_import_status(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                 'errorMessage': 'Processamento excedeu o limite de tempo',
                                 'updatedAt': datetime.now(timezone.utc).isoformat(),
                             },
+                            primary_key='importID',
                         )
 
                         # Update local record
