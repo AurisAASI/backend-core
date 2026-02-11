@@ -39,7 +39,8 @@ settings = Settings()
 # AWS clients
 cognito_client = boto3.client('cognito-idp')
 ses_client = boto3.client('ses')
-dynamodb = boto3.resource('dynamodb')
+
+auth_codes_db = DatabaseHandler(table_name=settings.auth_codes_table_name)
 
 # CORS headers to include in all responses
 CORS_HEADERS = {
@@ -110,47 +111,67 @@ def send_code_email(email: str, code: str) -> None:
     """
     subject = "Seu código de autenticação Auris"
     html_body = f"""
-    <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-                <h1 style="color: white; margin: 0;">Auris CRM</h1>
-            </div>
-            <div style="padding: 40px 30px; background-color: #f7fafc;">
-                <h2 style="color: #2d3748; margin-top: 0;">Bem-vindo à Auris!</h2>
-                <p style="color: #4a5568; font-size: 16px; line-height: 1.5;">
-                    Utilize o código abaixo para acessar sua conta:
-                </p>
-                <div style="background-color: white; border: 2px solid #667eea; border-radius: 8px; padding: 20px; margin: 30px 0; text-align: center;">
-                    <h1 style="color: #667eea; font-family: 'Courier New', monospace; letter-spacing: 8px; margin: 0; font-size: 36px;">
-                        {code}
-                    </h1>
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+        <head>
+            <meta charset="utf-8" />
+            <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+            <title>Codigo de Acesso - Auris Saude</title>
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f3f4f6; color: #1f2937; font-family: Arial, Helvetica, sans-serif;">
+            <div style="padding: 24px 16px;">
+                <div style="max-width: 480px; margin: 0 auto;">
+                    <div style="background-color: #ffffff; border: 1px solid #f1f5f9; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);">
+                        <div style="padding: 32px 32px 0 32px; text-align: center;">
+                            <div style="display: inline-flex; align-items: center; gap: 10px; margin-bottom: 28px;">
+                                <div style="height: 40px; width: 40px; border-radius: 999px; background-color: rgba(56, 178, 172, 0.12); display: inline-flex; align-items: center; justify-content: center; color: #38b2ac; font-weight: 700;">
+                                    A
+                                </div>
+                                <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #1f2937;">Auris Saude</span>
+                            </div>
+                        </div>
+                        <div style="padding: 0 32px 32px 32px; text-align: center;">
+                            <h1 style="font-size: 22px; font-weight: 700; color: #111827; margin: 0 0 12px 0;">Seu código de acesso chegou</h1>
+                            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">
+                                Utilize o código abaixo para validar sua identidade e acessar o CRM da Auris Saude.
+                            </p>
+                            <div style="background-color: #38b2ac; border-radius: 12px; padding: 18px 12px; margin: 0 0 24px 0;">
+                                <span style="display: inline-block; font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; letter-spacing: 0.4em; color: #ffffff; padding-left: 0.2em;">{code}</span>
+                            </div>
+                            <p style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">
+                                Este código é válido por <span style="color: #2c7a7b;">{settings.auth_code_validity_minutes} minutos</span>.
+                            </p>
+                            <div style="height: 1px; background-color: #f1f5f9; width: 100%; margin: 12px 0 16px 0;"></div>
+                            <p style="font-size: 12px; color: #6b7280; line-height: 1.6; font-style: italic; margin: 0;">
+                                Se você não solicitou este acesso, por favor ignore este email. Nenhuma ação adicional é necessária.
+                            </p>
+                        </div>
+                        <div style="height: 6px; background: linear-gradient(90deg, #38b2ac 0%, #2c7a7b 100%);"></div>
+                    </div>
+                    <div style="margin-top: 24px; text-align: center; padding: 0 8px;">
+                        <p style="font-size: 12px; color: #6b7280; font-weight: 600; margin: 0 0 6px 0;">
+                            Auris Saude Auditiva &amp; Clinical Management
+                        </p>
+                        <p style="font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.2em; margin: 0;">
+                            &copy; {datetime.now().year} Auris Saude. Todos os direitos reservados.
+                        </p>
+                    </div>
                 </div>
-                <p style="color: #718096; font-size: 14px;">
-                    <strong>Este código é válido por 5 minutos.</strong>
-                </p>
-                <p style="color: #a0aec0; font-size: 13px; margin-top: 30px;">
-                    Se você não solicitou este código, ignore este email.
-                </p>
-            </div>
-            <div style="background-color: #2d3748; padding: 20px; text-align: center;">
-                <p style="color: #a0aec0; font-size: 12px; margin: 0;">
-                    © {datetime.now().year} Auris CRM. Todos os direitos reservados.
-                </p>
             </div>
         </body>
     </html>
     """
 
     text_body = f"""
-Auris CRM - Código de Autenticação
+Auris Saude - Código de Acesso
 
 Seu código: {code}
 
-Este código é válido por 5 minutos.
+Este código é válido por {settings.auth_code_validity_minutes} minutos.
 
-Se você não solicitou este código, ignore este email.
+Se você não solicitou este acesso, ignore este email.
 
-© {datetime.now().year} Auris CRM
+© {datetime.now().year} Auris Saude. Todos os direitos reservados.
     """
 
     try:
@@ -340,11 +361,10 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
             minutes=settings.auth_code_validity_minutes
         )
         challenge_id = generate_challenge_id()
-        challenge_db = DatabaseHandler(table_name=settings.auth_codes_table_name)
 
         # Store code in DynamoDB with TTL
-        challenge_db.insert_item(
-            {
+        auth_codes_db.insert_item(
+            item={
                 'challengeID': challenge_id,
                 'email': email,
                 'code': code,
@@ -352,7 +372,7 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
                 'expiresAt': int(expires_at.timestamp()),
                 'attempts': 0,
                 'rememberMe': remember_me,
-                'ttl': int(expires_at.timestamp()),  # Auto-delete after expiry
+                'ttl': int(expires_at.timestamp()),
             },
             primary_key='challengeID',
         )
@@ -416,7 +436,7 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
     payload = extract_payload(event)
     email = payload.get('email', '').strip().lower()
     short_code = payload.get('shortCode', '').strip()
-    challenge_id = payload.get('challengeId', '')
+    challenge_id = payload.get('challengeID', '')
     remember_me = payload.get('rememberMe', False)
 
     # Validate inputs
@@ -436,11 +456,10 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         # Retrieve stored code from DynamoDB
-        codes_table = dynamodb.Table(settings.auth_codes_table_name)
-        response_item = codes_table.get_item(Key={'challengeId': challenge_id})
-        stored_data = response_item.get('Item')
+        stored_data = auth_codes_db._deserialize_item(auth_codes_db.get_item(key={'challengeID': challenge_id}))
 
         if not stored_data:
+            logger.warning(f"Challenge ID {challenge_id} not found")
             return response(
                 {'status': 'ERROR', 'error': {'code': 'INVALID_CHALLENGE', 'message': 'Challenge not found'}},
                 status_code=400,
@@ -449,6 +468,7 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
 
         # Verify email matches
         if stored_data['email'] != email:
+            logger.warning(f"Email mismatch for challenge ID {challenge_id}: expected {stored_data['email']}, got {email}")
             return response(
                 {'status': 'ERROR', 'error': {'code': 'EMAIL_MISMATCH', 'message': 'Email does not match challenge'}},
                 status_code=400,
@@ -458,7 +478,11 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
         # Check if code has expired
         current_time = int(datetime.utcnow().timestamp())
         if current_time > stored_data['expiresAt']:
-            codes_table.delete_item(Key={'challengeId': challenge_id})
+            logger.warning(f"Code expired for challenge ID {challenge_id}")
+            auth_codes_db.delete_item(
+                key={'challengeID': challenge_id},
+                primary_key='challengeID',
+            )
             return response(
                 {'status': 'ERROR', 'error': {'code': 'CODE_EXPIRED', 'message': 'Code has expired'}},
                 status_code=401,
@@ -467,7 +491,11 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
 
         # Check attempt limit
         if stored_data['attempts'] >= settings.auth_code_max_attempts:
-            codes_table.delete_item(Key={'challengeId': challenge_id})
+            logger.warning(f"Max attempts exceeded for challenge ID {challenge_id}")
+            auth_codes_db.delete_item(
+                key={'challengeID': challenge_id},
+                primary_key='challengeID',
+            )
             return response(
                 {'status': 'ERROR', 'error': {'code': 'MAX_ATTEMPTS_EXCEEDED', 'message': 'Too many attempts'}},
                 status_code=401,
@@ -476,11 +504,12 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
 
         # Verify code
         if stored_data['code'] != short_code:
+            logger.warning(f"Invalid code for challenge ID {challenge_id}: expected {stored_data['code']}, got {short_code}")
             # Increment attempts
-            codes_table.update_item(
-                Key={'challengeId': challenge_id},
-                UpdateExpression='SET attempts = attempts + :inc',
-                ExpressionAttributeValues={':inc': 1},
+            auth_codes_db.update_item(
+                key={'challengeID': challenge_id},
+                updates={'attempts': stored_data['attempts'] + 1},
+                primary_key='challengeID',
             )
             return response(
                 {'status': 'ERROR', 'error': {'code': 'INVALID_CODE', 'message': 'Code is incorrect'}},
@@ -489,11 +518,16 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
             )
 
         # Code is valid - delete the challenge
-        codes_table.delete_item(Key={'challengeId': challenge_id})
+        logger.info(f"Code verified successfully for challenge ID {challenge_id} and email {email}")
+        auth_codes_db.delete_item(
+            key={'challengeID': challenge_id},
+            primary_key='challengeID',
+        )
 
         # Get user data
         user_data = get_user_by_email(email)
         if not user_data:
+            logger.warning(f"User not found for email {email}")
             return response(
                 {'status': 'ERROR', 'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'}},
                 status_code=404,
@@ -507,6 +541,7 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
             company_id=user_data['companyId'],
             token_type='access',
         )
+        logger.info(f"Access token generated for user {email}")
 
         refresh_token = None
         if remember_me:
@@ -516,6 +551,7 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
                 company_id=user_data['companyId'],
                 token_type='refresh',
             )
+            logger.info(f"Refresh token generated for user {email}")
 
         logger.info(f"User {email} authenticated successfully")
 
@@ -585,6 +621,7 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
 
     # Validate inputs
     if not refresh_token or not email:
+        logger.warning("Missing refresh token or email in refresh request")
         return response(
             {'status': 'ERROR', 'error': {'code': 'MISSING_PARAMS', 'message': 'Missing refresh token or email'}},
             status_code=400,
@@ -595,6 +632,7 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
         # Validate refresh token JWT
         token_payload = validate_jwt_token(refresh_token, token_type='refresh')
         if not token_payload:
+            logger.warning("Invalid refresh token provided")
             return response(
                 {'status': 'ERROR', 'error': {'code': 'INVALID_TOKEN', 'message': 'Refresh token is invalid or expired'}},
                 status_code=401,
@@ -603,6 +641,7 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
 
         # Verify email in token matches request
         if token_payload.get('email') != email:
+            logger.warning(f"Email mismatch in refresh token: expected {token_payload.get('email')}, got {email}")
             return response(
                 {'status': 'ERROR', 'error': {'code': 'TOKEN_EMAIL_MISMATCH', 'message': 'Email does not match token'}},
                 status_code=401,
