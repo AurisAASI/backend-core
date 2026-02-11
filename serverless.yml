@@ -12,14 +12,28 @@ provider:
   memorySize: 128
   timeout: 30
   deploymentBucket:
-    maxPreviousDeploymentArtifacts: 10
+    maxPreviousDeploymentArtifacts: 5
   environment:
     # Global environment variables
     ACCOUNT_ID: ${env:AWS_ACCOUNT_ID, '819774487459'}
     STAGE: ${self:provider.stage}
     REGION: ${self:provider.region}
+    
     # API Key from AWS Cognito stored in environment
     API_KEY: ${env:API_KEY, ''}
+
+    #Authentication configuration
+    COGNITO_USER_POOL_ID_DEV: ${env:COGNITO_USER_POOL_ID_DEV}
+    COGNITO_USER_POOL_ID_PROD: ${env:COGNITO_USER_POOL_ID_PROD}
+    AUTH_CODE_VALIDITY_MINUTES: ${env:AUTH_CODE_VALIDITY_MINUTES, '5'}
+    AUTH_CODE_MAX_ATTEMPTS: ${env:AUTH_CODE_MAX_ATTEMPTS, '3'}
+    AUTH_CODE_LENGTH: ${env:AUTH_CODE_LENGTH, '6'}
+    JWT_SECRET_ARN: arn:aws:secretsmanager:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:secret:${self:provider.stage}-auris-jwt-secret-*
+    JWT_ACCESS_TOKEN_EXPIRY_HOURS: ${env:JWT_ACCESS_TOKEN_EXPIRY_HOURS, '8'}
+    JWT_REFRESH_TOKEN_EXPIRY_DAYS: ${env:JWT_REFRESH_TOKEN_EXPIRY_DAYS, '30'}
+    SES_FROM_EMAIL_DEV: ${env:SES_FROM_EMAIL_DEV}
+    SES_FROM_EMAIL_PROD: ${env:SES_FROM_EMAIL_PROD}
+
     # Google Places API configuration (stage-specific)
     GOOGLE_PLACES_API_KEY_DEV: ${env:GOOGLE_PLACES_API_KEY_DEV, ''}
     GOOGLE_PLACES_API_KEY_PROD: ${env:GOOGLE_PLACES_API_KEY_PROD, ''}
@@ -531,12 +545,28 @@ functions:
       - http:
           path: login
           method: post
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-api-key
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+            allowCredentials: false
           private: true  # Require API key
       - http:
           path: login
           method: options
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-api-key
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+            allowCredentials: false
     package:
       patterns:
         - src/functions/gl_login/**
@@ -544,7 +574,10 @@ functions:
     environment:
       FUNCTION_NAME: gl_login
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      AUTH_CODES_TABLE: ${self:provider.stage}-auris-auth-codes
       AWS_REGION_NAME: ${self:provider.region}
+      SES_FROM_EMAIL_DEV: ${env:SES_FROM_EMAIL_DEV}
+      SES_FROM_EMAIL_PROD: ${env:SES_FROM_EMAIL_PROD}
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -553,11 +586,35 @@ functions:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-companies
       - Effect: Allow
         Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-auth-codes
+      - Effect: Allow
+        Action:
           - dynamodb:ListTables
         Resource: "*"
+      - Effect: Allow
+        Action:
+          - ses:SendEmail
+          - ses:SendRawEmail
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - ses:GetAccount
+          - ses:GetSendQuota
+          - ses:GetSendStatistics
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - secretsmanager:GetSecretValue
+        Resource:
+          - arn:aws:secretsmanager:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:secret:${self:provider.stage}-auris-jwt-secret-*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_login:1
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_login:2
 
   gl_fetch_leads:
     handler: src/functions/gl_fetch_leads/fetch_leads_handler.fetch_leads_reminders
@@ -714,43 +771,6 @@ custom:
 
 resources:
   Resources:
-    # DynamoDB Tables are managed externally (already exist)
-    # Tables: ${self:provider.stage}-auris-core-companies, ${self:provider.stage}-auris-core-places
-
-    # AWS Secrets Manager - JWT Secret Key
-    JWTSecretKey:
-      Type: AWS::SecretsManager::Secret
-      Properties:
-        Name: ${self:provider.stage}-auris-jwt-secret
-        Description: JWT secret key for token signing and validation (rotates every 6 months)
-        GenerateSecretString:
-          SecretStringTemplate: '{}'
-          GenerateStringKey: jwt_secret_key
-          PasswordLength: 64
-          ExcludeCharacters: '"@\\'
-          RequireEachIncludedType: true
-        Tags:
-          - Key: Service
-            Value: ${self:service}
-          - Key: Stage
-            Value: ${self:provider.stage}
-          - Key: ManagedBy
-            Value: Serverless
-          - Key: RotationSchedule
-            Value: Every 6 months (180 days)
-
-    # Note: Automatic rotation for JWT secrets requires a custom Lambda function
-    # For now, rotation must be done manually using the setup script:
-    # npm run setup:jwt:dev --regenerate (every 6 months)
-    # npm run setup:jwt:prod --regenerate (every 6 months)
-    # 
-    # To enable automatic rotation, you would need to:
-    # 1. Create a custom rotation Lambda function
-    # 2. Add AWS::SecretsManager::RotationSchedule resource
-    # 3. Configure the rotation Lambda to regenerate the JWT secret
-    # 
-    # For security compliance, set a calendar reminder to manually rotate every 6 months
-
     # SQS Queues
     ScraperTaskQueue:
       Type: AWS::SQS::Queue
