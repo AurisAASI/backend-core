@@ -116,6 +116,13 @@ class TestFetchLeadHistoryHandler:
         event = {
             'httpMethod': 'POST',
             'body': json.dumps({'communicationIDs': ['comm-001']}),
+            'requestContext': {
+                'authorizer': {
+                    'claims': {
+                        'email': 'test@example.com'
+                    }
+                }
+            },
         }
 
         with patch(
@@ -132,6 +139,13 @@ class TestFetchLeadHistoryHandler:
         event = {
             'httpMethod': 'POST',
             'body': json.dumps({'companyID': '896504cc-bd92-448b-bc92-74bfcd2c73c2'}),
+            'requestContext': {
+                'authorizer': {
+                    'claims': {
+                        'email': 'test@example.com'
+                    }
+                }
+            },
         }
 
         with patch(
@@ -153,6 +167,13 @@ class TestFetchLeadHistoryHandler:
                     'communicationIDs': 'not-an-array',
                 }
             ),
+            'requestContext': {
+                'authorizer': {
+                    'claims': {
+                        'email': 'test@example.com'
+                    }
+                }
+            },
         }
 
         with patch(
@@ -166,7 +187,17 @@ class TestFetchLeadHistoryHandler:
 
     def test_invalid_json_body_returns_bad_request(self, lambda_context):
         """Test that invalid JSON body returns BAD_REQUEST."""
-        event = {'httpMethod': 'POST', 'body': 'invalid json'}
+        event = {
+            'httpMethod': 'POST',
+            'body': 'invalid json',
+            'requestContext': {
+                'authorizer': {
+                    'claims': {
+                        'email': 'test@example.com'
+                    }
+                }
+            },
+        }
 
         with patch(
             'src.functions.gl_fetch_lead_history.fetch_lead_history_handler.Settings'
@@ -180,6 +211,13 @@ class TestFetchLeadHistoryHandler:
         event = {
             'httpMethod': 'POST',
             'body': json.dumps({'companyID': 'company-123', 'communicationIDs': []}),
+            'requestContext': {
+                'authorizer': {
+                    'claims': {
+                        'email': 'test@example.com'
+                    }
+                }
+            },
         }
 
         with patch(
