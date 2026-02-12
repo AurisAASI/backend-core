@@ -4,18 +4,21 @@ Lambda handler for passwordless email authentication with AWS Cognito.
 This module provides HTTP endpoint functionality for three-stage authentication:
 
 Stage 1 - sendCode: Generate and send a 6-digit code via email
-Stage 2 - verifyCode: Validate the code and return JWT tokens  
-Stage 3 - refresh: Refresh the access token using the refresh token
+    Stage 2 - verifyCode: Validate the code and return Cognito tokens
+    Stage 3 - refresh: Refresh the access token using the refresh token
 
 Authentication Flow:
 1. User enters email -> System sends 6-digit code via SES
 2. User enters code -> System validates and returns access + refresh tokens
-3. Token expires -> System uses refresh token to get new access token
+3. Token expires -> System uses refresh token to get new access token from Cognito
 
 Each stage has specific payload requirements and returns structured responses
 with proper error handling and CORS support.
 """
 
+import base64
+import hashlib
+import hmac
 import json
 import random
 import string
@@ -25,7 +28,6 @@ from http import HTTPStatus
 from typing import Any, Dict, Optional
 
 import boto3
-import jwt
 from auris_tools.databaseHandlers import DatabaseHandler
 from aws_lambda_powertools import Logger
 from botocore.exceptions import ClientError
@@ -78,6 +80,44 @@ def extract_payload(event: Dict[str, Any]) -> Dict[str, Any]:
 def generate_challenge_id() -> str:
     """Generate unique challenge ID."""
     return "challenge-" + str(uuid.uuid4())
+
+
+def get_cognito_user_pool_id() -> str:
+    """Get Cognito user pool ID for the current stage."""
+    return settings.cognito_user_pool_id
+
+
+def get_cognito_app_client_id() -> str:
+    """Get Cognito app client ID for the current stage."""
+    if settings.stage == 'prod':
+        return settings.cognito_app_client_id_prod
+    return settings.cognito_app_client_id_dev
+
+
+def get_cognito_app_client_secret() -> Optional[str]:
+    """Get Cognito app client secret for the current stage, if configured."""
+    if settings.stage == 'prod':
+        return settings.cognito_app_client_secret_prod or None
+    return settings.cognito_app_client_secret_dev or None
+
+
+def build_secret_hash(username: str, client_id: str, client_secret: Optional[str]) -> Optional[str]:
+    """Build Cognito secret hash when app client secret is configured."""
+    if not client_secret:
+        return None
+    message = f"{username}{client_id}".encode('utf-8')
+    digest = hmac.new(client_secret.encode('utf-8'), message, hashlib.sha256).digest()
+    return base64.b64encode(digest).decode('utf-8')
+
+
+def build_auth_parameters(username: str, client_id: str) -> Dict[str, str]:
+    """Build Cognito auth parameters with optional secret hash."""
+    params = {'USERNAME': username}
+    secret = get_cognito_app_client_secret()
+    secret_hash = build_secret_hash(username, client_id, secret)
+    if secret_hash:
+        params['SECRET_HASH'] = secret_hash
+    return params
 
 
 def mask_email(email: str) -> str:
@@ -192,77 +232,65 @@ Se você não solicitou este acesso, ignore este email.
         raise
 
 
-def generate_jwt_token(
-    email: str,
-    user_id: str,
-    company_id: str,
-    token_type: str,
-    expires_in_hours: Optional[int] = None,
-    expires_in_days: Optional[int] = None,
-) -> str:
+def ensure_cognito_user(email: str, user_name: str) -> str:
     """
-    Generate JWT token for authentication.
+    Ensure a Cognito user exists and return the Cognito username.
 
     Args:
-        email: User email
-        user_id: User ID
-        company_id: Company ID
-        token_type: Type of token ('access' or 'refresh')
-        expires_in_hours: Expiry in hours (for access tokens)
-        expires_in_days: Expiry in days (for refresh tokens)
+        email: User email address
+        user_name: User display name
 
     Returns:
-        JWT token string
+        Cognito username
     """
-    now = datetime.utcnow()
+    user_pool_id = get_cognito_user_pool_id()
+    response_data = cognito_client.list_users(
+        UserPoolId=user_pool_id,
+        Filter=f'email = "{email}"',
+        Limit=1,
+    )
 
-    if token_type == 'refresh':
-        expiry = now + timedelta(
-            days=expires_in_days or settings.jwt_refresh_token_expiry_days
-        )
-    else:
-        expiry = now + timedelta(
-            hours=expires_in_hours or settings.jwt_access_token_expiry_hours
-        )
+    if response_data.get('Users'):
+        user = response_data['Users'][0]
+        username = user['Username']
+        if not user.get('Enabled', True):
+            cognito_client.admin_enable_user(UserPoolId=user_pool_id, Username=username)
 
-    payload = {
-        'email': email,
-        'userId': user_id,
-        'companyId': company_id,
-        'type': token_type,
-        'iat': now,
-        'exp': expiry,
-    }
+        attributes = {attr['Name']: attr['Value'] for attr in user.get('Attributes', [])}
+        if attributes.get('email_verified') != 'true':
+            cognito_client.admin_update_user_attributes(
+                UserPoolId=user_pool_id,
+                Username=username,
+                UserAttributes=[{'Name': 'email_verified', 'Value': 'true'}],
+            )
 
-    token = jwt.encode(payload, settings.jwt_secret_key, algorithm='HS256')
-    return token
+        return username
 
+    user_attributes = [
+        {'Name': 'email', 'Value': email},
+        {'Name': 'email_verified', 'Value': 'true'},
+    ]
+    if user_name:
+        user_attributes.append({'Name': 'name', 'Value': user_name})
 
-def validate_jwt_token(token: str, token_type: str) -> Optional[Dict[str, Any]]:
-    """
-    Validate and decode JWT token.
+    create_response = cognito_client.admin_create_user(
+        UserPoolId=user_pool_id,
+        Username=email,
+        UserAttributes=user_attributes,
+        MessageAction='SUPPRESS',
+    )
+    username = create_response['User']['Username']
 
-    Args:
-        token: JWT token string
-        token_type: Expected token type ('access' or 'refresh')
-
-    Returns:
-        Decoded payload dictionary if valid, None otherwise
-    """
     try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=['HS256'])
+        cognito_client.admin_confirm_sign_up(
+            UserPoolId=user_pool_id,
+            Username=username,
+        )
+    except ClientError as e:
+        if e.response.get('Error', {}).get('Code') != 'NotAuthorizedException':
+            logger.warning(f"Failed to confirm Cognito user {email}: {str(e)}")
 
-        if payload.get('type') != token_type:
-            logger.warning(f"Token type mismatch: expected {token_type}, got {payload.get('type')}")
-            return None
-
-        return payload
-    except jwt.ExpiredSignatureError:
-        logger.warning("Token has expired")
-        return None
-    except jwt.InvalidTokenError as e:
-        logger.warning(f"Invalid token: {str(e)}")
-        return None
+    return username
 
 
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
@@ -352,6 +380,52 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
                 headers=CORS_HEADERS,
             )
 
+        challenge_id = generate_challenge_id()
+
+        # Ensure Cognito user exists and initiate custom auth
+        cognito_username = ensure_cognito_user(email, user_data.get('userName', ''))
+        client_id = get_cognito_app_client_id()
+        auth_params = build_auth_parameters(cognito_username, client_id)
+
+        auth_response = cognito_client.initiate_auth(
+            ClientId=client_id,
+            AuthFlow='CUSTOM_AUTH',
+            AuthParameters=auth_params,
+            ClientMetadata={
+                'challengeId': challenge_id,
+                'email': email,
+            },
+        )
+
+        if auth_response.get('ChallengeName') != 'CUSTOM_CHALLENGE':
+            logger.error(f"Unexpected challenge name: {auth_response.get('ChallengeName')}")
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'AUTH_CHALLENGE_ERROR',
+                        'message': 'Unexpected authentication challenge',
+                    },
+                },
+                status_code=500,
+                headers=CORS_HEADERS,
+            )
+
+        session_token = auth_response.get('Session')
+        if not session_token:
+            logger.error("Cognito did not return a session token")
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'AUTH_SESSION_ERROR',
+                        'message': 'Failed to initiate authentication session',
+                    },
+                },
+                status_code=500,
+                headers=CORS_HEADERS,
+            )
+
         # Generate 6-digit code
         code = ''.join(
             random.choices(string.digits, k=settings.auth_code_length)
@@ -360,7 +434,6 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
         expires_at = created_at + timedelta(
             minutes=settings.auth_code_validity_minutes
         )
-        challenge_id = generate_challenge_id()
 
         # Store code in DynamoDB with TTL
         auth_codes_db.insert_item(
@@ -372,6 +445,8 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
                 'expiresAt': int(expires_at.timestamp()),
                 'attempts': 0,
                 'rememberMe': remember_me,
+                'cognitoSession': session_token,
+                'cognitoUsername': cognito_username,
                 'ttl': int(expires_at.timestamp()),
             },
             primary_key='challengeID',
@@ -431,12 +506,12 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     Returns:
-        Success response with user data and JWT tokens
+        Success response with user data and Cognito tokens
     """
     payload = extract_payload(event)
     email = payload.get('email', '').strip().lower()
-    short_code = payload.get('shortCode', '').strip()
-    challenge_id = payload.get('challengeID', '')
+    short_code = (payload.get('shortCode') or payload.get('code') or '').strip()
+    challenge_id = payload.get('challengeId') or payload.get('challengeID', '')
     remember_me = payload.get('rememberMe', False)
 
     # Validate inputs
@@ -474,6 +549,9 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
                 status_code=400,
                 headers=CORS_HEADERS,
             )
+
+        if 'rememberMe' not in payload:
+            remember_me = stored_data.get('rememberMe', False)
 
         # Check if code has expired
         current_time = int(datetime.utcnow().timestamp())
@@ -517,6 +595,59 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
                 headers=CORS_HEADERS,
             )
 
+        # Code is valid - exchange for Cognito tokens
+        cognito_session = stored_data.get('cognitoSession')
+        cognito_username = stored_data.get('cognitoUsername') or email
+        if not cognito_session:
+            logger.error(f"Missing Cognito session for challenge ID {challenge_id}")
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'AUTH_SESSION_MISSING',
+                        'message': 'Authentication session not found',
+                    },
+                },
+                status_code=401,
+                headers=CORS_HEADERS,
+            )
+
+        client_id = get_cognito_app_client_id()
+        challenge_responses = {
+            'USERNAME': cognito_username,
+            'ANSWER': short_code,
+        }
+        secret = get_cognito_app_client_secret()
+        secret_hash = build_secret_hash(cognito_username, client_id, secret)
+        if secret_hash:
+            challenge_responses['SECRET_HASH'] = secret_hash
+
+        auth_response = cognito_client.respond_to_auth_challenge(
+            ClientId=client_id,
+            ChallengeName='CUSTOM_CHALLENGE',
+            Session=cognito_session,
+            ChallengeResponses=challenge_responses,
+            ClientMetadata={
+                'challengeId': challenge_id,
+                'email': email,
+            },
+        )
+
+        auth_result = auth_response.get('AuthenticationResult')
+        if not auth_result:
+            logger.error(f"Cognito did not return tokens for {email}")
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'TOKEN_ISSUE_FAILED',
+                        'message': 'Failed to issue tokens',
+                    },
+                },
+                status_code=500,
+                headers=CORS_HEADERS,
+            )
+
         # Code is valid - delete the challenge
         logger.info(f"Code verified successfully for challenge ID {challenge_id} and email {email}")
         auth_codes_db.delete_item(
@@ -534,24 +665,11 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
                 headers=CORS_HEADERS,
             )
 
-        # Generate tokens
-        access_token = generate_jwt_token(
-            email=email,
-            user_id=user_data['userId'],
-            company_id=user_data['companyId'],
-            token_type='access',
-        )
-        logger.info(f"Access token generated for user {email}")
-
-        refresh_token = None
-        if remember_me:
-            refresh_token = generate_jwt_token(
-                email=email,
-                user_id=user_data['userId'],
-                company_id=user_data['companyId'],
-                token_type='refresh',
-            )
-            logger.info(f"Refresh token generated for user {email}")
+        access_token = auth_result.get('AccessToken')
+        id_token = auth_result.get('IdToken')
+        refresh_token = auth_result.get('RefreshToken')
+        expires_in = auth_result.get('ExpiresIn') or settings.jwt_access_token_expiry_hours * 3600
+        expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat() + 'Z'
 
         logger.info(f"User {email} authenticated successfully")
 
@@ -564,12 +682,9 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
             'tokens': {
                 'accessToken': {
                     'value': access_token,
-                    'expiresAt': (
-                        datetime.utcnow()
-                        + timedelta(hours=settings.jwt_access_token_expiry_hours)
-                    ).isoformat()
-                    + 'Z',
+                    'expiresAt': expires_at,
                 },
+                'idToken': {'value': id_token},
             },
         }
 
@@ -604,10 +719,8 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
     Expected payload:
     {
         "stage": "refresh",
-        "refreshToken": "jwt_refresh_token",
-        "email": "user@company.com",
-        "userId": "usr_123",
-        "companyId": "cmp_456"
+        "refreshToken": "cognito_refresh_token",
+        "email": "user@company.com"
     }
 
     Returns:
@@ -616,47 +729,63 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
     payload = extract_payload(event)
     refresh_token = payload.get('refreshToken', '')
     email = payload.get('email', '').strip().lower()
-    user_id = payload.get('userId', '')
-    company_id = payload.get('companyId', '')
 
     # Validate inputs
-    if not refresh_token or not email:
-        logger.warning("Missing refresh token or email in refresh request")
+    if not refresh_token:
+        logger.warning("Missing refresh token in refresh request")
         return response(
-            {'status': 'ERROR', 'error': {'code': 'MISSING_PARAMS', 'message': 'Missing refresh token or email'}},
+            {'status': 'ERROR', 'error': {'code': 'MISSING_PARAMS', 'message': 'Missing refresh token'}},
             status_code=400,
             headers=CORS_HEADERS,
         )
 
     try:
-        # Validate refresh token JWT
-        token_payload = validate_jwt_token(refresh_token, token_type='refresh')
-        if not token_payload:
-            logger.warning("Invalid refresh token provided")
-            return response(
-                {'status': 'ERROR', 'error': {'code': 'INVALID_TOKEN', 'message': 'Refresh token is invalid or expired'}},
-                status_code=401,
-                headers=CORS_HEADERS,
-            )
+        client_id = get_cognito_app_client_id()
+        secret = get_cognito_app_client_secret()
+        auth_parameters = {'REFRESH_TOKEN': refresh_token}
 
-        # Verify email in token matches request
-        if token_payload.get('email') != email:
-            logger.warning(f"Email mismatch in refresh token: expected {token_payload.get('email')}, got {email}")
-            return response(
-                {'status': 'ERROR', 'error': {'code': 'TOKEN_EMAIL_MISMATCH', 'message': 'Email does not match token'}},
-                status_code=401,
-                headers=CORS_HEADERS,
-            )
+        if secret:
+            if not email:
+                return response(
+                    {
+                        'status': 'ERROR',
+                        'error': {
+                            'code': 'MISSING_EMAIL',
+                            'message': 'Email is required to refresh token',
+                        },
+                    },
+                    status_code=400,
+                    headers=CORS_HEADERS,
+                )
+            auth_parameters['USERNAME'] = email
+            auth_parameters['SECRET_HASH'] = build_secret_hash(email, client_id, secret)
 
-        # Use token payload data for new access token
-        new_access_token = generate_jwt_token(
-            email=email,
-            user_id=token_payload.get('userId', user_id),
-            company_id=token_payload.get('companyId', company_id),
-            token_type='access',
+        auth_response = cognito_client.initiate_auth(
+            ClientId=client_id,
+            AuthFlow='REFRESH_TOKEN_AUTH',
+            AuthParameters=auth_parameters,
         )
 
-        logger.info(f"Token refreshed for user {email}")
+        auth_result = auth_response.get('AuthenticationResult')
+        if not auth_result:
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'TOKEN_REFRESH_FAILED',
+                        'message': 'Failed to refresh token',
+                    },
+                },
+                status_code=401,
+                headers=CORS_HEADERS,
+            )
+
+        new_access_token = auth_result.get('AccessToken')
+        new_id_token = auth_result.get('IdToken')
+        expires_in = auth_result.get('ExpiresIn') or settings.jwt_access_token_expiry_hours * 3600
+        expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat() + 'Z'
+
+        logger.info(f"Token refreshed for user {email or 'unknown'}")
 
         return response(
             {
@@ -665,12 +794,9 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
                     'tokens': {
                         'accessToken': {
                             'value': new_access_token,
-                            'expiresAt': (
-                                datetime.utcnow()
-                                + timedelta(hours=settings.jwt_access_token_expiry_hours)
-                            ).isoformat()
-                            + 'Z',
-                        }
+                            'expiresAt': expires_at,
+                        },
+                        'idToken': {'value': new_id_token},
                     }
                 },
             },
@@ -773,11 +899,14 @@ def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 },
                 "tokens": {
                     "accessToken": {
-                        "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "value": "eyJraWQiOiJ...",
                         "expiresAt": "2026-02-11T08:30:45.123456Z"
                     },
+                    "idToken": {
+                        "value": "eyJraWQiOiJ..."
+                    },
                     "refreshToken": {
-                        "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        "value": "eyJjdHkiOiJ..."
                     }
                 }
             }
@@ -803,10 +932,8 @@ def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Request:
     {
         "stage": "refresh",
-        "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-        "email": "user@company.com",
-        "userId": "usr_550e8400e29b41d4a716446655440000",
-        "companyId": "896504cc-bd92-448b-bc92-74bfcd2c73c2"
+        "refreshToken": "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwiYWxnIjoiUlNBLU9BRVAifQ...",
+        "email": "user@company.com"
     }
 
     Response (Success - 200):
@@ -818,8 +945,11 @@ def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             "data": {
                 "tokens": {
                     "accessToken": {
-                        "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "value": "eyJraWQiOiJ...",
                         "expiresAt": "2026-02-11T08:30:45.123456Z"
+                    },
+                    "idToken": {
+                        "value": "eyJraWQiOiJ..."
                     }
                 }
             }
