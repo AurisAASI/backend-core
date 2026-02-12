@@ -79,7 +79,7 @@ def extract_payload(event: Dict[str, Any]) -> Dict[str, Any]:
 
 def generate_challenge_id() -> str:
     """Generate unique challenge ID."""
-    return "challenge-" + str(uuid.uuid4())
+    return 'challenge-' + str(uuid.uuid4())
 
 
 def get_cognito_user_pool_id() -> str:
@@ -101,11 +101,13 @@ def get_cognito_app_client_secret() -> Optional[str]:
     return settings.cognito_app_client_secret_dev or None
 
 
-def build_secret_hash(username: str, client_id: str, client_secret: Optional[str]) -> Optional[str]:
+def build_secret_hash(
+    username: str, client_id: str, client_secret: Optional[str]
+) -> Optional[str]:
     """Build Cognito secret hash when app client secret is configured."""
     if not client_secret:
         return None
-    message = f"{username}{client_id}".encode('utf-8')
+    message = f'{username}{client_id}'.encode('utf-8')
     digest = hmac.new(client_secret.encode('utf-8'), message, hashlib.sha256).digest()
     return base64.b64encode(digest).decode('utf-8')
 
@@ -135,7 +137,7 @@ def mask_email(email: str) -> str:
         masked = parts[0]
     else:
         masked = parts[0][0] + '*' * (len(parts[0]) - 2) + parts[0][-1]
-    return f"{masked}@{parts[1]}"
+    return f'{masked}@{parts[1]}'
 
 
 def send_code_email(email: str, code: str) -> None:
@@ -149,7 +151,7 @@ def send_code_email(email: str, code: str) -> None:
     Raises:
         ClientError: If SES send fails
     """
-    subject = "Seu código de autenticação Auris"
+    subject = 'Seu código de autenticação Auris'
     html_body = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -226,9 +228,9 @@ Se você não solicitou este acesso, ignore este email.
                 },
             },
         )
-        logger.info(f"Email sent successfully to {email}")
+        logger.info(f'Email sent successfully to {email}')
     except ClientError as e:
-        logger.error(f"Failed to send email to {email}: {str(e)}")
+        logger.error(f'Failed to send email to {email}: {str(e)}')
         raise
 
 
@@ -256,7 +258,9 @@ def ensure_cognito_user(email: str, user_name: str) -> str:
         if not user.get('Enabled', True):
             cognito_client.admin_enable_user(UserPoolId=user_pool_id, Username=username)
 
-        attributes = {attr['Name']: attr['Value'] for attr in user.get('Attributes', [])}
+        attributes = {
+            attr['Name']: attr['Value'] for attr in user.get('Attributes', [])
+        }
         if attributes.get('email_verified') != 'true':
             cognito_client.admin_update_user_attributes(
                 UserPoolId=user_pool_id,
@@ -288,7 +292,7 @@ def ensure_cognito_user(email: str, user_name: str) -> str:
         )
     except ClientError as e:
         if e.response.get('Error', {}).get('Code') != 'NotAuthorizedException':
-            logger.warning(f"Failed to confirm Cognito user {email}: {str(e)}")
+            logger.warning(f'Failed to confirm Cognito user {email}: {str(e)}')
 
     return username
 
@@ -334,7 +338,7 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
                 ):
                     # Verify user is active
                     if user.get('status', '').lower() != 'ativo':
-                        logger.warning(f"User {email} is not active")
+                        logger.warning(f'User {email} is not active')
                         return None
 
                     return {
@@ -347,7 +351,7 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
         return None
 
     except Exception as e:
-        logger.error(f"Error fetching user by email: {str(e)}", exc_info=True)
+        logger.error(f'Error fetching user by email: {str(e)}', exc_info=True)
         return None
 
 
@@ -375,7 +379,13 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
         if not user_data:
             # For security, don't reveal if user exists or not
             return response(
-                {'status': 'ERROR', 'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found or inactive'}},
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'USER_NOT_FOUND',
+                        'message': 'User not found or inactive',
+                    },
+                },
                 status_code=404,
                 headers=CORS_HEADERS,
             )
@@ -398,7 +408,9 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
         )
 
         if auth_response.get('ChallengeName') != 'CUSTOM_CHALLENGE':
-            logger.error(f"Unexpected challenge name: {auth_response.get('ChallengeName')}")
+            logger.error(
+                f"Unexpected challenge name: {auth_response.get('ChallengeName')}"
+            )
             return response(
                 {
                     'status': 'ERROR',
@@ -413,7 +425,7 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
 
         session_token = auth_response.get('Session')
         if not session_token:
-            logger.error("Cognito did not return a session token")
+            logger.error('Cognito did not return a session token')
             return response(
                 {
                     'status': 'ERROR',
@@ -427,13 +439,9 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
             )
 
         # Generate 6-digit code
-        code = ''.join(
-            random.choices(string.digits, k=settings.auth_code_length)
-        )
+        code = ''.join(random.choices(string.digits, k=settings.auth_code_length))
         created_at = datetime.utcnow()
-        expires_at = created_at + timedelta(
-            minutes=settings.auth_code_validity_minutes
-        )
+        expires_at = created_at + timedelta(minutes=settings.auth_code_validity_minutes)
 
         # Store code in DynamoDB with TTL
         auth_codes_db.insert_item(
@@ -455,7 +463,7 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
         # Send code via SES
         send_code_email(email, code)
 
-        logger.info(f"Code sent to {email} with challengeId {challenge_id}")
+        logger.info(f'Code sent to {email} with challengeId {challenge_id}')
 
         return response(
             {
@@ -477,16 +485,25 @@ def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     except ClientError as e:
-        logger.error(f"AWS error in send_code: {str(e)}")
+        logger.error(f'AWS error in send_code: {str(e)}')
         return response(
-            {'status': 'ERROR', 'error': {'code': 'AWS_ERROR', 'message': 'Failed to process request'}},
+            {
+                'status': 'ERROR',
+                'error': {'code': 'AWS_ERROR', 'message': 'Failed to process request'},
+            },
             status_code=500,
             headers=CORS_HEADERS,
         )
     except Exception as e:
-        logger.error(f"Unexpected error in send_code: {str(e)}", exc_info=True)
+        logger.error(f'Unexpected error in send_code: {str(e)}', exc_info=True)
         return response(
-            {'status': 'ERROR', 'error': {'code': 'SERVER_ERROR', 'message': 'An unexpected error occurred'}},
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'SERVER_ERROR',
+                    'message': 'An unexpected error occurred',
+                },
+            },
             status_code=500,
             headers=CORS_HEADERS,
         )
@@ -517,35 +534,63 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
     # Validate inputs
     if not email or not short_code or not challenge_id:
         return response(
-            {'status': 'ERROR', 'error': {'code': 'MISSING_PARAMS', 'message': 'Missing required parameters'}},
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'MISSING_PARAMS',
+                    'message': 'Missing required parameters',
+                },
+            },
             status_code=400,
             headers=CORS_HEADERS,
         )
 
     if not short_code.isdigit() or len(short_code) != settings.auth_code_length:
         return response(
-            {'status': 'ERROR', 'error': {'code': 'INVALID_CODE_FORMAT', 'message': f'Code must be {settings.auth_code_length} digits'}},
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'INVALID_CODE_FORMAT',
+                    'message': f'Code must be {settings.auth_code_length} digits',
+                },
+            },
             status_code=400,
             headers=CORS_HEADERS,
         )
 
     try:
         # Retrieve stored code from DynamoDB
-        stored_data = auth_codes_db._deserialize_item(auth_codes_db.get_item(key={'challengeID': challenge_id}))
+        stored_data = auth_codes_db._deserialize_item(
+            auth_codes_db.get_item(key={'challengeID': challenge_id})
+        )
 
         if not stored_data:
-            logger.warning(f"Challenge ID {challenge_id} not found")
+            logger.warning(f'Challenge ID {challenge_id} not found')
             return response(
-                {'status': 'ERROR', 'error': {'code': 'INVALID_CHALLENGE', 'message': 'Challenge not found'}},
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'INVALID_CHALLENGE',
+                        'message': 'Challenge not found',
+                    },
+                },
                 status_code=400,
                 headers=CORS_HEADERS,
             )
 
         # Verify email matches
         if stored_data['email'] != email:
-            logger.warning(f"Email mismatch for challenge ID {challenge_id}: expected {stored_data['email']}, got {email}")
+            logger.warning(
+                f"Email mismatch for challenge ID {challenge_id}: expected {stored_data['email']}, got {email}"
+            )
             return response(
-                {'status': 'ERROR', 'error': {'code': 'EMAIL_MISMATCH', 'message': 'Email does not match challenge'}},
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'EMAIL_MISMATCH',
+                        'message': 'Email does not match challenge',
+                    },
+                },
                 status_code=400,
                 headers=CORS_HEADERS,
             )
@@ -556,33 +601,44 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
         # Check if code has expired
         current_time = int(datetime.utcnow().timestamp())
         if current_time > stored_data['expiresAt']:
-            logger.warning(f"Code expired for challenge ID {challenge_id}")
+            logger.warning(f'Code expired for challenge ID {challenge_id}')
             auth_codes_db.delete_item(
                 key={'challengeID': challenge_id},
                 primary_key='challengeID',
             )
             return response(
-                {'status': 'ERROR', 'error': {'code': 'CODE_EXPIRED', 'message': 'Code has expired'}},
+                {
+                    'status': 'ERROR',
+                    'error': {'code': 'CODE_EXPIRED', 'message': 'Code has expired'},
+                },
                 status_code=401,
                 headers=CORS_HEADERS,
             )
 
         # Check attempt limit
         if stored_data['attempts'] >= settings.auth_code_max_attempts:
-            logger.warning(f"Max attempts exceeded for challenge ID {challenge_id}")
+            logger.warning(f'Max attempts exceeded for challenge ID {challenge_id}')
             auth_codes_db.delete_item(
                 key={'challengeID': challenge_id},
                 primary_key='challengeID',
             )
             return response(
-                {'status': 'ERROR', 'error': {'code': 'MAX_ATTEMPTS_EXCEEDED', 'message': 'Too many attempts'}},
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'MAX_ATTEMPTS_EXCEEDED',
+                        'message': 'Too many attempts',
+                    },
+                },
                 status_code=401,
                 headers=CORS_HEADERS,
             )
 
         # Verify code
         if stored_data['code'] != short_code:
-            logger.warning(f"Invalid code for challenge ID {challenge_id}: expected {stored_data['code']}, got {short_code}")
+            logger.warning(
+                f"Invalid code for challenge ID {challenge_id}: expected {stored_data['code']}, got {short_code}"
+            )
             # Increment attempts
             auth_codes_db.update_item(
                 key={'challengeID': challenge_id},
@@ -590,7 +646,10 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
                 primary_key='challengeID',
             )
             return response(
-                {'status': 'ERROR', 'error': {'code': 'INVALID_CODE', 'message': 'Code is incorrect'}},
+                {
+                    'status': 'ERROR',
+                    'error': {'code': 'INVALID_CODE', 'message': 'Code is incorrect'},
+                },
                 status_code=401,
                 headers=CORS_HEADERS,
             )
@@ -599,7 +658,7 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
         cognito_session = stored_data.get('cognitoSession')
         cognito_username = stored_data.get('cognitoUsername') or email
         if not cognito_session:
-            logger.error(f"Missing Cognito session for challenge ID {challenge_id}")
+            logger.error(f'Missing Cognito session for challenge ID {challenge_id}')
             return response(
                 {
                     'status': 'ERROR',
@@ -635,7 +694,7 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
 
         auth_result = auth_response.get('AuthenticationResult')
         if not auth_result:
-            logger.error(f"Cognito did not return tokens for {email}")
+            logger.error(f'Cognito did not return tokens for {email}')
             return response(
                 {
                     'status': 'ERROR',
@@ -649,7 +708,9 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
             )
 
         # Code is valid - delete the challenge
-        logger.info(f"Code verified successfully for challenge ID {challenge_id} and email {email}")
+        logger.info(
+            f'Code verified successfully for challenge ID {challenge_id} and email {email}'
+        )
         auth_codes_db.delete_item(
             key={'challengeID': challenge_id},
             primary_key='challengeID',
@@ -658,9 +719,12 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
         # Get user data
         user_data = get_user_by_email(email)
         if not user_data:
-            logger.warning(f"User not found for email {email}")
+            logger.warning(f'User not found for email {email}')
             return response(
-                {'status': 'ERROR', 'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'}},
+                {
+                    'status': 'ERROR',
+                    'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'},
+                },
                 status_code=404,
                 headers=CORS_HEADERS,
             )
@@ -668,10 +732,15 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
         access_token = auth_result.get('AccessToken')
         id_token = auth_result.get('IdToken')
         refresh_token = auth_result.get('RefreshToken')
-        expires_in = auth_result.get('ExpiresIn') or settings.jwt_access_token_expiry_hours * 3600
-        expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat() + 'Z'
+        expires_in = (
+            auth_result.get('ExpiresIn')
+            or settings.jwt_access_token_expiry_hours * 3600
+        )
+        expires_at = (
+            datetime.utcnow() + timedelta(seconds=expires_in)
+        ).isoformat() + 'Z'
 
-        logger.info(f"User {email} authenticated successfully")
+        logger.info(f'User {email} authenticated successfully')
 
         response_data = {
             'user': {
@@ -697,16 +766,25 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     except ClientError as e:
-        logger.error(f"AWS error in verify_code: {str(e)}")
+        logger.error(f'AWS error in verify_code: {str(e)}')
         return response(
-            {'status': 'ERROR', 'error': {'code': 'AWS_ERROR', 'message': 'Failed to process request'}},
+            {
+                'status': 'ERROR',
+                'error': {'code': 'AWS_ERROR', 'message': 'Failed to process request'},
+            },
             status_code=500,
             headers=CORS_HEADERS,
         )
     except Exception as e:
-        logger.error(f"Unexpected error in verify_code: {str(e)}", exc_info=True)
+        logger.error(f'Unexpected error in verify_code: {str(e)}', exc_info=True)
         return response(
-            {'status': 'ERROR', 'error': {'code': 'SERVER_ERROR', 'message': 'An unexpected error occurred'}},
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'SERVER_ERROR',
+                    'message': 'An unexpected error occurred',
+                },
+            },
             status_code=500,
             headers=CORS_HEADERS,
         )
@@ -732,9 +810,12 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
 
     # Validate inputs
     if not refresh_token:
-        logger.warning("Missing refresh token in refresh request")
+        logger.warning('Missing refresh token in refresh request')
         return response(
-            {'status': 'ERROR', 'error': {'code': 'MISSING_PARAMS', 'message': 'Missing refresh token'}},
+            {
+                'status': 'ERROR',
+                'error': {'code': 'MISSING_PARAMS', 'message': 'Missing refresh token'},
+            },
             status_code=400,
             headers=CORS_HEADERS,
         )
@@ -782,8 +863,13 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
 
         new_access_token = auth_result.get('AccessToken')
         new_id_token = auth_result.get('IdToken')
-        expires_in = auth_result.get('ExpiresIn') or settings.jwt_access_token_expiry_hours * 3600
-        expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat() + 'Z'
+        expires_in = (
+            auth_result.get('ExpiresIn')
+            or settings.jwt_access_token_expiry_hours * 3600
+        )
+        expires_at = (
+            datetime.utcnow() + timedelta(seconds=expires_in)
+        ).isoformat() + 'Z'
 
         logger.info(f"Token refreshed for user {email or 'unknown'}")
 
@@ -804,9 +890,15 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     except Exception as e:
-        logger.error(f"Error in refresh_token: {str(e)}", exc_info=True)
+        logger.error(f'Error in refresh_token: {str(e)}', exc_info=True)
         return response(
-            {'status': 'ERROR', 'error': {'code': 'TOKEN_REFRESH_FAILED', 'message': 'Failed to refresh token'}},
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'TOKEN_REFRESH_FAILED',
+                    'message': 'Failed to refresh token',
+                },
+            },
             status_code=401,
             headers=CORS_HEADERS,
         )
@@ -993,7 +1085,13 @@ def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             return handle_refresh_token(event)
         else:
             return response(
-                {'status': 'ERROR', 'error': {'code': 'INVALID_STAGE', 'message': 'Invalid authentication stage'}},
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'INVALID_STAGE',
+                        'message': 'Invalid authentication stage',
+                    },
+                },
                 status_code=400,
                 headers=CORS_HEADERS,
             )
@@ -1001,7 +1099,10 @@ def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except ValueError as e:
         logger.warning(f'Validation error: {str(e)}')
         return response(
-            {'status': 'ERROR', 'error': {'code': 'VALIDATION_ERROR', 'message': str(e)}},
+            {
+                'status': 'ERROR',
+                'error': {'code': 'VALIDATION_ERROR', 'message': str(e)},
+            },
             status_code=400,
             headers=CORS_HEADERS,
         )
@@ -1009,8 +1110,13 @@ def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f'Unexpected error: {str(e)}', exc_info=True)
         return response(
-            {'status': 'ERROR', 'error': {'code': 'SERVER_ERROR', 'message': 'An unexpected error occurred'}},
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'SERVER_ERROR',
+                    'message': 'An unexpected error occurred',
+                },
+            },
             status_code=500,
             headers=CORS_HEADERS,
         )
-
