@@ -1,18 +1,43 @@
 {
-    "update_data": {
-        "leadID": "lead-3dae6adf-2e89-4ab8-a2bd-b69152ce7f78",
-        "companyID": "896504cc-bd92-448b-bc92-74bfcd2c73c2",
-        "fullName": "João Silva Mendes",
-        "phone": "5516987650000",
-        "email": "joao.silva@example.com",
-        "city": "São Bernardo do Campo",
-        "allowsMarketing": true,
-        "entryDate": "2026-01-22T09:00:00.000Z",
-        "statusLead": "Em contato",
-        "statusClassification": "Quente",
-        "source": "Phone",
-        "audiologist": "Dra. Souza",
-        "reminderDate": "2026-01-23T09:00:00.000Z",
-        "observations": "Interessado em aparelhos auditivos avançados."
+  "resource": "/leads/communication_register",
+  "path": "/leads/communication_register",
+  "httpMethod": "POST",
+  "headers": {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1cy1lYXN0LTFfNGRjR3cxa1ZLXzEyMzQ1Njc4LWFiY2QtZWZnaC1pams9IiwiZW1haWwiOiJhbnRvbmlvLmZpbGhvQGF1ZGl0aWsuY29tLmJyIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImNvZ25pdG86dXNlcm5hbWUiOiJhbnRvbmlvLmZpbGhvQGF1ZGl0aWsuY29tLmJyIiwiYXVkIjoiYWJjZGVmMTIzNDU2In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+  },
+  "queryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "accountId": "123456789012",
+    "resourceId": "abc123",
+    "stage": "dev",
+    "requestId": "test-request-id",
+    "identity": {
+      "sourceIp": "127.0.0.1",
+      "userAgent": "PostmanRuntime/7.29.0"
+    },
+    "resourcePath": "/leads/communication_register",
+    "httpMethod": "POST",
+    "apiId": "test123",
+    "authorizer": {
+      "claims": {
+        "sub": "us-east-1_4dcGw1kVK_12345678-abcd-efgh-ijkl=",
+        "email": "antonio.filho@auditik.com.br",
+        "email_verified": "true",
+        "cognito:username": "antonio.filho@auditik.com.br",
+        "aud": "abcdef123456",
+        "event_id": "e3db11e0-dedb-11ed-d418-ac26b9b5f00",
+        "token_use": "id",
+        "auth_time": "1739232832",
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_4dcGw1kVK",
+        "name": "Antonio Filho",
+        "phone_number": "+55 11 99999-9999"
+      }
     }
+  },
+  "body": "{\"leadID\": \"lead-3dae6adf-2e89-4ab8-a2bd-b69152ce7f78\", \"observations\": \"Interessado em aparelhos auditivos avançados. Follow-up necessário.\", \"statusLead\": \"Em contato\", \"source\": \"Telefone\"}",
+  "isBase64Encoded": false
 }
