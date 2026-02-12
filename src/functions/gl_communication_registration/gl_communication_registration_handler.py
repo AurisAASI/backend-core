@@ -93,26 +93,28 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
     Lambda handler for registering a new communication for an existing lead.
 
     This function can be invoked in two ways:
-    1. Via API Gateway POST request (direct HTTP trigger)
-    2. Via SQS event from gl_queue_manager (synchronous invocation)
+    1. Via API Gateway POST request with Cognito authentication (authenticated user email from Cognito token)
+    2. Via SQS event from gl_queue_manager (enriched payload with update_data)
 
     Process:
     1. Detect trigger type and extract payload accordingly
-    2. Validate required fields (leadID, companyID, message)
-    3. Validate lead exists and belongs to company
-    4. Create communication history entry
-    5. Update lead record with new communication ID
-    6. Optionally update lead status
+    2. For API Gateway: extract authenticated user email from Cognito authorizer context
+    3. Validate required fields (leadID, companyID, message/observations)
+    4. Validate lead exists and belongs to company
+    5. Create communication history entry
+    6. Update lead record with new communication ID
+    7. Optionally update lead status
 
     Args:
         event: Lambda invocation event. Can be:
-            - API Gateway event with 'body' containing JSON payload
+            - API Gateway event with 'body' containing JSON payload and Cognito claims
             - SQS event with enriched payload in 'update_data'
         context: Lambda context object
 
     Returns:
         Success response (200) with communication ID
         Error response (400) on validation errors
+        Error response (401) on authentication errors
         Error response (500) on unexpected errors
 
     Response Body (200 OK):
@@ -129,6 +131,37 @@ def communication_registration(event: Dict[str, Any], context: Any) -> Dict[str,
         # Handle preflight
         if event.get('httpMethod') == 'OPTIONS':
             return response(status_code=HTTPStatus.OK, message='', headers=CORS_HEADERS)
+
+        # Extract authenticated user from Cognito if API Gateway trigger
+        authenticated_email = None
+        is_api_gateway = 'body' in event and isinstance(event.get('body'), str)
+
+        if is_api_gateway:
+            try:
+                authorizer = event.get('requestContext', {}).get('authorizer', {})
+                claims = authorizer.get('claims', {})
+                authenticated_email = claims.get('email', '').strip().lower()
+
+                if not authenticated_email:
+                    logger.error('Missing email in Cognito token')
+                    return response(
+                        status_code=401,
+                        message={
+                            'message': 'Authentication error: email claim missing in token'
+                        },
+                        headers=CORS_HEADERS,
+                    )
+
+                logger.info(f'Request authenticated for user: {authenticated_email}')
+            except Exception as e:
+                logger.error(f'Failed to extract authenticated user: {str(e)}')
+                return response(
+                    status_code=401,
+                    message={
+                        'message': 'Authentication error: unable to verify user identity'
+                    },
+                    headers=CORS_HEADERS,
+                )
 
         # Extract payload based on trigger type
         form_data = _extract_payload_from_event(event)

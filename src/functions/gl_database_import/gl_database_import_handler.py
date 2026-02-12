@@ -92,7 +92,6 @@ def generate_presigned_upload_url(
             "fileSize": 52428800,
             "fileType": "text/csv",
             "companyID": "comp-123",
-            "userEmail": "user@example.com",
             "assignedUser": "user@example.com"
         }
 
@@ -116,6 +115,33 @@ def generate_presigned_upload_url(
         if event.get('httpMethod') == 'OPTIONS':
             return response(status_code=200, message='', headers=CORS_HEADERS)
 
+        # Extract authenticated user email from Cognito authorizer
+        try:
+            authorizer = event.get('requestContext', {}).get('authorizer', {})
+            claims = authorizer.get('claims', {})
+            authenticated_email = claims.get('email', '').strip().lower()
+
+            if not authenticated_email:
+                logger.error('Missing email in Cognito token')
+                return response(
+                    status_code=401,
+                    message={
+                        'error': 'Authentication error: email claim missing in token'
+                    },
+                    headers=CORS_HEADERS,
+                )
+
+            logger.info(f'Request authenticated for user: {authenticated_email}')
+        except Exception as e:
+            logger.error(f'Failed to extract authenticated user: {str(e)}')
+            return response(
+                status_code=401,
+                message={
+                    'error': 'Authentication error: unable to verify user identity'
+                },
+                headers=CORS_HEADERS,
+            )
+
         # Extract and validate payload
         body = json.loads(event.get('body', '{}'))
 
@@ -123,7 +149,6 @@ def generate_presigned_upload_url(
         file_size = body.get('fileSize', 0)
         file_type = body.get('fileType', '').strip()
         company_id = body.get('companyID', '').strip()
-        user_email = body.get('userEmail', '').strip()
         assigned_user = body.get('assignedUser', '').strip()
 
         # Validate required fields
@@ -141,12 +166,7 @@ def generate_presigned_upload_url(
                 headers=CORS_HEADERS,
             )
 
-        if not user_email:
-            return response(
-                status_code=400,
-                message={'error': 'Email do usuário é obrigatório'},
-                headers=CORS_HEADERS,
-            )
+        user_email = authenticated_email
 
         # Validate file extension
         file_ext = Path(file_name).suffix.lower()
@@ -973,7 +993,8 @@ def get_import_status(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Get import status with automatic timeout detection for polling.
 
-    This endpoint is polled by the frontend to track import progress.
+    This endpoint is polled by the frontend to track import progress and
+    requires Cognito authentication.
     It automatically detects stuck imports and marks them as timed out.
 
     Process:
@@ -1017,6 +1038,33 @@ def get_import_status(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Handle OPTIONS preflight
         if event.get('httpMethod') == 'OPTIONS':
             return response(status_code=200, message='', headers=CORS_HEADERS)
+
+        # Extract authenticated user email from Cognito authorizer
+        try:
+            authorizer = event.get('requestContext', {}).get('authorizer', {})
+            claims = authorizer.get('claims', {})
+            authenticated_email = claims.get('email', '').strip().lower()
+
+            if not authenticated_email:
+                logger.error('Missing email in Cognito token')
+                return response(
+                    status_code=401,
+                    message={
+                        'error': 'Authentication error: email claim missing in token'
+                    },
+                    headers=CORS_HEADERS,
+                )
+
+            logger.info(f'Request authenticated for user: {authenticated_email}')
+        except Exception as e:
+            logger.error(f'Failed to extract authenticated user: {str(e)}')
+            return response(
+                status_code=401,
+                message={
+                    'error': 'Authentication error: unable to verify user identity'
+                },
+                headers=CORS_HEADERS,
+            )
 
         # Extract importID from query parameters
         query_params = event.get('queryStringParameters') or {}

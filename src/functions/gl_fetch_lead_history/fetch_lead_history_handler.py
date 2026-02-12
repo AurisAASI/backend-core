@@ -1,7 +1,7 @@
 """
 Lambda handler for fetching organized lead communication history.
 
-Exposes POST /leads/fetch_history (API key protected) and retrieves
+Exposes POST /leads/fetch_history (Cognito protected) and retrieves
 communication records from DynamoDB by a provided list of communicationIDs.
 
 Process:
@@ -24,7 +24,7 @@ from auris_tools.databaseHandlers import DatabaseHandler
 from aws_lambda_powertools import Logger
 
 from src.shared.settings import Settings
-from src.shared.utils import response, validate_request_source
+from src.shared.utils import response
 
 logger = Logger(service='fetch_lead_history')
 settings = Settings()
@@ -42,9 +42,8 @@ def _parse_body(event: Dict[str, Any]) -> Dict[str, Any]:
 
     Expected body JSON:
     {
-            "companyID": "...",
-            "communicationIDs": ["id1", "id2", ...],
-            "userEmail": "optional@example.com"  # temporary until Cognito
+        "companyID": "...",
+        "communicationIDs": ["id1", "id2", ...]
     }
     """
     raw_body = event.get('body') or ''
@@ -55,7 +54,6 @@ def _parse_body(event: Dict[str, Any]) -> Dict[str, Any]:
 
     company_id = (body.get('companyID') or '').strip().lower()
     comm_ids = body.get('communicationIDs')
-    user_email = (body.get('userEmail') or '').strip().lower()
 
     if not company_id:
         raise ValueError('Missing required field: companyID')
@@ -70,7 +68,6 @@ def _parse_body(event: Dict[str, Any]) -> Dict[str, Any]:
     return {
         'companyID': company_id,
         'communicationIDs': comm_ids,
-        'userEmail': user_email,
     }
 
 
@@ -162,17 +159,39 @@ def fetch_lead_history(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 headers=CORS_HEADERS,
             )
 
+        # Extract authenticated user email from Cognito authorizer
+        try:
+            authorizer = event.get('requestContext', {}).get('authorizer', {})
+            claims = authorizer.get('claims', {})
+            authenticated_email = claims.get('email', '').strip().lower()
+
+            if not authenticated_email:
+                logger.error('Missing email in Cognito token')
+                return response(
+                    status_code=HTTPStatus.UNAUTHORIZED,
+                    message={
+                        'message': 'Authentication error: email claim missing in token'
+                    },
+                    headers=CORS_HEADERS,
+                )
+
+            logger.append_keys(email=authenticated_email)
+            logger.info(f'Request authenticated for user: {authenticated_email}')
+        except Exception as exc:
+            logger.error(f'Failed to extract authenticated user: {exc}')
+            return response(
+                status_code=HTTPStatus.UNAUTHORIZED,
+                message={
+                    'message': 'Authentication error: unable to verify user identity'
+                },
+                headers=CORS_HEADERS,
+            )
+
         params = _parse_body(event)
         company_id = params['companyID']
         comm_ids = params['communicationIDs']
-        user_email = params.get('userEmail') or ''
 
         logger.append_keys(companyID=company_id)
-        if user_email:
-            logger.append_keys(email=user_email)
-            logger.info('Validating the request source (user email)')
-            validate_request_source(user_email)
-            logger.info(f'Request source validated for user: {user_email}')
 
         # Fetch communications and validate companyID
         found_count = 0
