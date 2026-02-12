@@ -30,9 +30,6 @@ provider:
     AUTH_CODE_VALIDITY_MINUTES: ${env:AUTH_CODE_VALIDITY_MINUTES, '5'}
     AUTH_CODE_MAX_ATTEMPTS: ${env:AUTH_CODE_MAX_ATTEMPTS, '3'}
     AUTH_CODE_LENGTH: ${env:AUTH_CODE_LENGTH, '6'}
-    JWT_SECRET_ARN: arn:aws:secretsmanager:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:secret:${self:provider.stage}-auris-jwt-secret-*
-    JWT_ACCESS_TOKEN_EXPIRY_HOURS: ${env:JWT_ACCESS_TOKEN_EXPIRY_HOURS, '8'}
-    JWT_REFRESH_TOKEN_EXPIRY_DAYS: ${env:JWT_REFRESH_TOKEN_EXPIRY_DAYS, '30'}
     SES_FROM_EMAIL_DEV: ${env:SES_FROM_EMAIL_DEV}
     SES_FROM_EMAIL_PROD: ${env:SES_FROM_EMAIL_PROD}
 
@@ -64,11 +61,6 @@ provider:
             - logs:CreateLogStream
             - logs:PutLogEvents
           Resource: "arn:aws:logs:*:*:*"
-        # Secrets Manager permissions for JWT secret
-        - Effect: Allow
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource: "arn:aws:secretsmanager:${self:provider.region}:${env:AWS_ACCOUNT_ID}:secret:${self:provider.stage}-auris-jwt-secret-*"
 
 package:
   individually: true
@@ -704,11 +696,6 @@ functions:
           - cognito-idp:InitiateAuth
           - cognito-idp:RespondToAuthChallenge
         Resource: "*"
-      - Effect: Allow
-        Action:
-          - secretsmanager:GetSecretValue
-        Resource:
-          - arn:aws:secretsmanager:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:secret:${self:provider.stage}-auris-jwt-secret-*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
       - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_login:2

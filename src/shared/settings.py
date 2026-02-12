@@ -326,65 +326,6 @@ class Settings:
 
         return from_email
 
-    # JWT Configuration
-    @property
-    def jwt_secret_key(self) -> str:
-        """
-        Get the JWT secret key for token signing from AWS Secrets Manager.
-
-        Returns:
-            JWT secret key for token generation and validation
-        """
-        import json
-
-        import boto3
-        from botocore.exceptions import ClientError
-
-        # Try to get from environment first (for local development)
-        secret_key = os.environ.get('JWT_SECRET_KEY', '')
-        if secret_key:
-            return secret_key
-
-        # Fetch from AWS Secrets Manager
-        secret_name = f'{self.stage}-auris-jwt-secret'
-        region_name = self.region
-
-        # Create a Secrets Manager client
-        session = boto3.session.Session()
-        client = session.client(service_name='secretsmanager', region_name=region_name)
-
-        try:
-            get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-        except ClientError as e:
-            raise ValueError(
-                f'Failed to retrieve JWT secret from Secrets Manager: {str(e)}'
-            )
-
-        # Secrets Manager returns the secret as a JSON string
-        if 'SecretString' in get_secret_value_response:
-            secret = get_secret_value_response['SecretString']
-            # Try to parse as JSON first
-            try:
-                secret_dict = json.loads(secret)
-                return secret_dict.get('jwt_secret_key', secret)
-            except json.JSONDecodeError:
-                # If not JSON, return the plain string
-                return secret
-        else:
-            raise ValueError('JWT secret key not found in Secrets Manager')
-
-        return secret_key
-
-    @property
-    def jwt_access_token_expiry_hours(self) -> int:
-        """Get the JWT access token expiry in hours."""
-        return int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRY_HOURS', '8'))
-
-    @property
-    def jwt_refresh_token_expiry_days(self) -> int:
-        """Get the JWT refresh token expiry in days."""
-        return int(os.environ.get('JWT_REFRESH_TOKEN_EXPIRY_DAYS', '30'))
-
     # Authentication Configuration
     @property
     def auth_code_validity_minutes(self) -> int:

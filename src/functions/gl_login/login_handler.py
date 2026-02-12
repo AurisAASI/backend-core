@@ -732,10 +732,7 @@ def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
         access_token = auth_result.get('AccessToken')
         id_token = auth_result.get('IdToken')
         refresh_token = auth_result.get('RefreshToken')
-        expires_in = (
-            auth_result.get('ExpiresIn')
-            or settings.jwt_access_token_expiry_hours * 3600
-        )
+        expires_in = auth_result.get('ExpiresIn') or 3600
         expires_at = (
             datetime.utcnow() + timedelta(seconds=expires_in)
         ).isoformat() + 'Z'
@@ -863,10 +860,7 @@ def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
 
         new_access_token = auth_result.get('AccessToken')
         new_id_token = auth_result.get('IdToken')
-        expires_in = (
-            auth_result.get('ExpiresIn')
-            or settings.jwt_access_token_expiry_hours * 3600
-        )
+        expires_in = auth_result.get('ExpiresIn') or 3600
         expires_at = (
             datetime.utcnow() + timedelta(seconds=expires_in)
         ).isoformat() + 'Z'
@@ -928,7 +922,7 @@ def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     {
         "stage": "sendCode",
         "email": "user@company.com",
-        "rememberMe": false
+            expires_in = auth_result.get('ExpiresIn') or 3600
     }
 
     Response (Success - 200):

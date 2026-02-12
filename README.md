@@ -231,26 +231,6 @@ xdg-open htmlcov/index.html  # Linux
 
 ## Deployment
 
-### Prerequisites - JWT Secret Setup
-
-**IMPORTANT:** Before deploying for the first time, you must set up the JWT secret in AWS Secrets Manager:
-
-```bash
-# For development
-npm run setup:jwt:dev
-
-# For production
-npm run setup:jwt:prod
-```
-
-This will:
-- Generate a cryptographically secure 64-character random secret
-- Store it in AWS Secrets Manager as `{stage}-auris-jwt-secret`
-- Configure automatic rotation every 6 months (180 days)
-- Enable Lambda functions to fetch the secret at runtime
-
-See [scripts/README.md](scripts/README.md) for more details on JWT secret management.
-
 ### Deploy to Development
 
 Deploys to `dev` stage with dev-specific resources and configuration:
@@ -262,7 +242,6 @@ This will:
 - Create/update `dev-auris-core-*` DynamoDB tables
 - Deploy Lambda functions with dev API keys
 - Use dev quota limits (10,000/day default)
-- Configure access to `dev-auris-jwt-secret` in Secrets Manager
 
 ### Deploy to Production
 
