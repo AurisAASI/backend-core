@@ -6,7 +6,22 @@ across the entire backend-core project, supporting both dev and prod environment
 """
 
 import os
+from pathlib import Path
 from typing import Literal, Optional
+
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+# Locate .env file from the project root (find parent directory containing backend-core structure)
+_current_dir = Path(__file__).resolve().parent  # src/shared
+_project_root = _current_dir.parent.parent  # Go up to project root
+_env_file = _project_root / '.env'
+
+if _env_file.exists():
+    load_dotenv(_env_file, override=True)
+else:
+    # Fallback to current working directory
+    load_dotenv(override=True)
 
 
 class Settings:
@@ -218,6 +233,82 @@ class Settings:
 
         return pool_id
 
+    @property
+    def cognito_user_pool_id_dev(self) -> Optional[str]:
+        """
+        Get the Cognito User Pool ID for dev stage.
+
+        Returns:
+            User Pool ID for dev environment
+        """
+        return os.environ.get('COGNITO_USER_POOL_ID_DEV', '')
+
+    @property
+    def cognito_user_pool_id_prod(self) -> Optional[str]:
+        """
+        Get the Cognito User Pool ID for prod stage.
+
+        Returns:
+            User Pool ID for prod environment
+        """
+        return os.environ.get('COGNITO_USER_POOL_ID_PROD', '')
+
+    @property
+    def cognito_app_client_id_dev(self) -> str:
+        """
+        Get the Cognito App Client ID for dev stage.
+
+        Returns:
+            App Client ID for dev environment
+
+        Raises:
+            ValueError: If not configured
+        """
+        client_id = os.environ.get('COGNITO_APP_CLIENT_ID_DEV', '')
+        if not client_id:
+            raise ValueError(
+                'Missing required environment variable: COGNITO_APP_CLIENT_ID_DEV'
+            )
+        return client_id
+
+    @property
+    def cognito_app_client_id_prod(self) -> str:
+        """
+        Get the Cognito App Client ID for prod stage.
+
+        Returns:
+            App Client ID for prod environment
+
+        Raises:
+            ValueError: If not configured
+        """
+        client_id = os.environ.get('COGNITO_APP_CLIENT_ID_PROD', '')
+        if not client_id:
+            raise ValueError(
+                'Missing required environment variable: COGNITO_APP_CLIENT_ID_PROD'
+            )
+        return client_id
+
+    @property
+    def cognito_app_client_secret_dev(self) -> Optional[str]:
+        """
+        Get the Cognito App Client Secret for dev stage (optional).
+
+        Returns:
+            App Client Secret for dev environment or empty string
+        """
+        return os.environ.get('COGNITO_APP_CLIENT_SECRET_DEV', '')
+
+    @property
+    def cognito_app_client_secret_prod(self) -> Optional[str]:
+        """
+        Get the Cognito App Client Secret for prod stage (optional).
+
+        Returns:
+            App Client Secret for prod environment or empty string
+        """
+        return os.environ.get('COGNITO_APP_CLIENT_SECRET_PROD', '')
+
     # AWS SES Configuration
     @property
     def ses_from_email(self) -> str:
@@ -244,8 +335,9 @@ class Settings:
         Returns:
             JWT secret key for token generation and validation
         """
-        import boto3
         import json
+
+        import boto3
         from botocore.exceptions import ClientError
 
         # Try to get from environment first (for local development)
@@ -259,17 +351,14 @@ class Settings:
 
         # Create a Secrets Manager client
         session = boto3.session.Session()
-        client = session.client(
-            service_name='secretsmanager',
-            region_name=region_name
-        )
+        client = session.client(service_name='secretsmanager', region_name=region_name)
 
         try:
-            get_secret_value_response = client.get_secret_value(
-                SecretId=secret_name
-            )
+            get_secret_value_response = client.get_secret_value(SecretId=secret_name)
         except ClientError as e:
-            raise ValueError(f'Failed to retrieve JWT secret from Secrets Manager: {str(e)}')
+            raise ValueError(
+                f'Failed to retrieve JWT secret from Secrets Manager: {str(e)}'
+            )
 
         # Secrets Manager returns the secret as a JSON string
         if 'SecretString' in get_secret_value_response:
