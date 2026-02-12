@@ -116,13 +116,7 @@ class TestFetchLeadHistoryHandler:
         event = {
             'httpMethod': 'POST',
             'body': json.dumps({'communicationIDs': ['comm-001']}),
-            'requestContext': {
-                'authorizer': {
-                    'claims': {
-                        'email': 'test@example.com'
-                    }
-                }
-            },
+            'requestContext': {'authorizer': {'claims': {'email': 'test@example.com'}}},
         }
 
         with patch(
@@ -139,13 +133,7 @@ class TestFetchLeadHistoryHandler:
         event = {
             'httpMethod': 'POST',
             'body': json.dumps({'companyID': '896504cc-bd92-448b-bc92-74bfcd2c73c2'}),
-            'requestContext': {
-                'authorizer': {
-                    'claims': {
-                        'email': 'test@example.com'
-                    }
-                }
-            },
+            'requestContext': {'authorizer': {'claims': {'email': 'test@example.com'}}},
         }
 
         with patch(
@@ -167,13 +155,7 @@ class TestFetchLeadHistoryHandler:
                     'communicationIDs': 'not-an-array',
                 }
             ),
-            'requestContext': {
-                'authorizer': {
-                    'claims': {
-                        'email': 'test@example.com'
-                    }
-                }
-            },
+            'requestContext': {'authorizer': {'claims': {'email': 'test@example.com'}}},
         }
 
         with patch(
@@ -190,13 +172,7 @@ class TestFetchLeadHistoryHandler:
         event = {
             'httpMethod': 'POST',
             'body': 'invalid json',
-            'requestContext': {
-                'authorizer': {
-                    'claims': {
-                        'email': 'test@example.com'
-                    }
-                }
-            },
+            'requestContext': {'authorizer': {'claims': {'email': 'test@example.com'}}},
         }
 
         with patch(
@@ -211,13 +187,7 @@ class TestFetchLeadHistoryHandler:
         event = {
             'httpMethod': 'POST',
             'body': json.dumps({'companyID': 'company-123', 'communicationIDs': []}),
-            'requestContext': {
-                'authorizer': {
-                    'claims': {
-                        'email': 'test@example.com'
-                    }
-                }
-            },
+            'requestContext': {'authorizer': {'claims': {'email': 'test@example.com'}}},
         }
 
         with patch(
