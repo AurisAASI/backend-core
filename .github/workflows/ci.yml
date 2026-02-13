@@ -60,6 +60,9 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          COGNITO_USER_POOL_ID_DEV: ${{ secrets.COGNITO_USER_POOL_ID_DEV }}
+          COGNITO_APP_CLIENT_ID_DEV: ${{ secrets.COGNITO_APP_CLIENT_ID_DEV }}
+          SES_FROM_EMAIL_DEV: ${{ vars.SES_FROM_EMAIL_DEV }}
         run: npm run deploy:dev
 
   deploy-prod:
@@ -89,4 +92,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          COGNITO_USER_POOL_ID_PROD: ${{ secrets.COGNITO_USER_POOL_ID_PROD }}
+          COGNITO_APP_CLIENT_ID_PROD: ${{ secrets.COGNITO_APP_CLIENT_ID_PROD }}
+          SES_FROM_EMAIL_PROD: ${{ vars.SES_FROM_EMAIL_PROD }}
         run: npm run deploy:prod
