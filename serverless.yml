@@ -915,8 +915,8 @@ plugins:
 custom:
   # Cognito User Pool ARN for the current stage
   cognitoUserPoolArn:
-    dev: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_DEV}
-    prod: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_PROD}
+    dev: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_DEV, ''}
+    prod: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_PROD, ''}
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
     description: API key for ${self:service} service in ${self:provider.stage} stage
