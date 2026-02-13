@@ -132,7 +132,38 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Lambda: login - Success",
+            "name": "Lambda: communication_registration (Queue Manager)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "communication_registration",
+                "-e", "${workspaceFolder}/.vscode/event-communication-registration-queue.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Lambda: login - Stage 1: Send Code",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/manage.py",
+            "args": [
+                "-f", "login",
+                "-e", "${workspaceFolder}/.vscode/event-login-send-code.json"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "COGNITO_USER_POOL_ID_DEV": "${env:COGNITO_USER_POOL_ID_DEV}",
+                "COGNITO_APP_CLIENT_ID_DEV": "${env:COGNITO_APP_CLIENT_ID_DEV}",
+                "COGNITO_APP_CLIENT_SECRET_DEV": "${env:COGNITO_APP_CLIENT_SECRET_DEV}",
+                "AWS_REGION": "${env:AWS_REGION:us-east-1}",
+                "REGION": "${env:AWS_REGION:us-east-1}"
+            }
+        },
+        {
+            "name": "Lambda: login - Stage 1: Send Code (Invalid Email)",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/manage.py",
@@ -144,43 +175,57 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Lambda: login - Invalid Email",
+            "name": "Lambda: login - Stage 2: Verify Code",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/manage.py",
             "args": [
                 "-f", "login",
-                "-e", "${workspaceFolder}/.vscode/event-login-invalid-email.json"
+                "-e", "${workspaceFolder}/.vscode/event-login-verify-code.json"
             ],
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "COGNITO_USER_POOL_ID_DEV": "${env:COGNITO_USER_POOL_ID_DEV}",
+                "COGNITO_APP_CLIENT_ID_DEV": "${env:COGNITO_APP_CLIENT_ID_DEV}",
+                "COGNITO_APP_CLIENT_SECRET_DEV": "${env:COGNITO_APP_CLIENT_SECRET_DEV}",
+                "AWS_REGION": "${env:AWS_REGION:us-east-1}",
+                "REGION": "${env:AWS_REGION:us-east-1}"
+            }
         },
         {
-            "name": "Lambda: login - Missing Email",
+            "name": "Lambda: login - Stage 2: Verify Code (Invalid Code)",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/manage.py",
             "args": [
                 "-f", "login",
-                "-e", "${workspaceFolder}/.vscode/event-login-missing-email.json"
+                "-e", "${workspaceFolder}/.vscode/event-login-verify-code-invalid.json"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Lambda: login - User Not Found",
+            "name": "Lambda: login - Stage 3: Refresh Token",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/manage.py",
             "args": [
                 "-f", "login",
-                "-e", "${workspaceFolder}/.vscode/event-login-user-not-found.json"
+                "-e", "${workspaceFolder}/.vscode/event-login-refresh-token.json"
             ],
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "COGNITO_USER_POOL_ID_DEV": "${env:COGNITO_USER_POOL_ID_DEV}",
+                "COGNITO_APP_CLIENT_ID_DEV": "${env:COGNITO_APP_CLIENT_ID_DEV}",
+                "COGNITO_APP_CLIENT_SECRET_DEV": "${env:COGNITO_APP_CLIENT_SECRET_DEV}",
+                "AWS_REGION": "${env:AWS_REGION:us-east-1}",
+                "REGION": "${env:AWS_REGION:us-east-1}"
+            }
         },
         {
-            "name": "Lambda: login - Preflight",
+            "name": "Lambda: login - OPTIONS Preflight",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/manage.py",

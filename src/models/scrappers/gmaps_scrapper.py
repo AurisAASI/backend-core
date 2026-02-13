@@ -602,7 +602,8 @@ class GMapsScrapper(BaseScrapper):
                             # Update existing place
                             self.db_handler.update_item(
                                 key={'placeID': place_id},
-                                update_data=place,
+                                updates=place,
+                                primary_key='placeID',
                             )
                             self.ensamble['stats']['updated_places'] += 1
                             logger.info(
@@ -616,7 +617,7 @@ class GMapsScrapper(BaseScrapper):
                         continue
 
                     # New place - generate company ID and insert
-                    company_id = str(uuid.uuid4())
+                    company_id = 'company-' + str(uuid.uuid4())
 
                     # Build company data using schema template
                     company_data = COMPANY_SCHEMA.copy()

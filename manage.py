@@ -21,6 +21,15 @@ from src.functions.gl_database_import.gl_database_import_handler import (
     database_import_orchestrator,
     get_import_status,
 )
+from src.functions.cognito_triggers.define_auth_challenge import (
+    lambda_handler as cognito_define_auth_challenge,
+)
+from src.functions.cognito_triggers.create_auth_challenge import (
+    lambda_handler as cognito_create_auth_challenge,
+)
+from src.functions.cognito_triggers.verify_auth_challenge_response import (
+    lambda_handler as cognito_verify_auth_challenge_response,
+)
 
 
 # Available lambda functions
@@ -39,6 +48,9 @@ LAMBDA_FUNCTIONS = {
     'database_import_generate_url': generate_presigned_upload_url,
     'database_import_orchestrator': database_import_orchestrator,
     'database_import_status': get_import_status,
+    'cognito_define_auth_challenge': cognito_define_auth_challenge,
+    'cognito_create_auth_challenge': cognito_create_auth_challenge,
+    'cognito_verify_auth_challenge_response': cognito_verify_auth_challenge_response,
 }
 
 

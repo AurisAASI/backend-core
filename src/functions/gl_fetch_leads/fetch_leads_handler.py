@@ -1,7 +1,7 @@
 """
 Lambda handler for fetching lead reminders.
 
-Exposes GET /leads/fetch_reminders (API key protected) and filters leads in DynamoDB by:
+Exposes GET /leads/fetch_reminders (Cognito protected) and filters leads in DynamoDB by:
 - reminderDate null/absent
 - reminderDate older than past 7 days
 - reminderDate between past 7 days and next 60 days
@@ -21,7 +21,7 @@ from aws_lambda_powertools import Logger
 from boto3.dynamodb.conditions import Attr
 
 from src.shared.settings import Settings
-from src.shared.utils import response, validate_request_source
+from src.shared.utils import response
 
 logger = Logger(service='fetch_leads_reminders')
 settings = Settings()
@@ -48,17 +48,12 @@ def _validate_and_normalize_params(event: Dict[str, Any]) -> Dict[str, str]:
     """Extract and lowercase required query params."""
     params = event.get('queryStringParameters') or {}
     company_id = (params.get('companyID') or '').strip().lower()
-    email = (params.get('userEmail') or '').strip().lower()
 
-    missing = [
-        name
-        for name, value in [('companyID', company_id), ('userEmail', email)]
-        if not value
-    ]
+    missing = [name for name, value in [('companyID', company_id)] if not value]
     if missing:
         raise ValueError(f"Missing required query parameters: {', '.join(missing)}")
 
-    return {'companyID': company_id, 'userEmail': email}
+    return {'companyID': company_id}
 
 
 def _build_date_bounds() -> Dict[str, str]:
@@ -129,14 +124,36 @@ def fetch_leads_reminders(event: Dict[str, Any], context: Any) -> Dict[str, Any]
                 headers=CORS_HEADERS,
             )
 
-        filters = _validate_and_normalize_params(event)
-        logger.append_keys(companyID=filters['companyID'], email=filters['userEmail'])
+        # Extract authenticated user email from Cognito authorizer
+        try:
+            authorizer = event.get('requestContext', {}).get('authorizer', {})
+            claims = authorizer.get('claims', {})
+            authenticated_email = claims.get('email', '').strip().lower()
 
-        # TODO Por hora, existe um campo userEmail no body, mas depois será trocado pela logica do COgnito
-        # TODO Remove the validate_request_source logic after integrating with Cognito
-        logger.info('Validating the request source (user email)')
-        validate_request_source(filters['userEmail'])
-        logger.info(f"Request source validated for user: {filters['userEmail']}")
+            if not authenticated_email:
+                logger.error('Missing email in Cognito token')
+                return response(
+                    status_code=HTTPStatus.UNAUTHORIZED,
+                    message={
+                        'message': 'Authentication error: email claim missing in token'
+                    },
+                    headers=CORS_HEADERS,
+                )
+
+            logger.append_keys(email=authenticated_email)
+            logger.info(f'Request authenticated for user: {authenticated_email}')
+        except Exception as exc:
+            logger.error(f'Failed to extract authenticated user: {exc}')
+            return response(
+                status_code=HTTPStatus.UNAUTHORIZED,
+                message={
+                    'message': 'Authentication error: unable to verify user identity'
+                },
+                headers=CORS_HEADERS,
+            )
+
+        filters = _validate_and_normalize_params(event)
+        logger.append_keys(companyID=filters['companyID'])
 
         items = _scan_leads(filters)
         if not items:

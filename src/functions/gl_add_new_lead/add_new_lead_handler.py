@@ -154,24 +154,30 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler for creating a new lead via HTTP POST request.
 
+    Authentication: AWS Cognito User Pool (user must be authenticated)
+
     Process:
-    1. Extract and validate payload from API Gateway event
-    2. Normalize phone number (strip non-digits, validate length)
-    3. Validate required fields and source enum value
-        communication_db = DatabaseHandler(table_name=settings.communication_history_table_name)
-    4. Validate company exists in companies table
-    5. Check for duplicate phone within same company using GSI
-    6. Generate leadId and build complete lead record with defaults
-    7. Insert lead into DynamoDB
-    8. Return success response with leadId
+    1. Extract authenticated user email from Cognito authorizer context
+    2. Extract and validate payload from API Gateway event
+    3. Normalize phone number (strip non-digits, validate length)
+    4. Validate required fields and source enum value
+    5. Validate company exists in companies table
+    6. Check for duplicate phone within same company using GSI
+    7. Create initial communication history entry
+    8. Generate leadId and build complete lead record with defaults
+    9. Insert lead into DynamoDB
+    10. Return success response with leadId
 
     Args:
-        event: API Gateway HTTP event with body containing lead data
+        event: API Gateway HTTP event with:
+            - body: JSON containing lead data
+            - requestContext.authorizer.claims: Cognito user claims (email, sub, etc.)
         context: Lambda context object
 
     Returns:
         API Gateway response with 201 status and leadId on success
         API Gateway response with 400 status on validation errors
+        API Gateway response with 401 status on authentication errors
         API Gateway response with 500 status on unexpected errors
 
     Expected Request Body:
@@ -200,15 +206,36 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.info('Handling OPTIONS preflight request')
             return response(status_code=200, message='', headers=CORS_HEADERS)
 
+        # Extract authenticated user email from Cognito authorizer
+        try:
+            authorizer = event.get('requestContext', {}).get('authorizer', {})
+            claims = authorizer.get('claims', {})
+            authenticated_email = claims.get('email', '').strip().lower()
+
+            if not authenticated_email:
+                logger.error('Missing email in Cognito token')
+                return response(
+                    status_code=401,
+                    message={
+                        'message': 'Authentication error: email claim missing in token'
+                    },
+                    headers=CORS_HEADERS,
+                )
+
+            logger.info(f'Request authenticated for user: {authenticated_email}')
+        except Exception as e:
+            logger.error(f'Failed to extract authenticated user: {str(e)}')
+            return response(
+                status_code=401,
+                message={
+                    'message': 'Authentication error: unable to verify user identity'
+                },
+                headers=CORS_HEADERS,
+            )
+
         # Extract and validate payload
         payload = extract_payload(event)
         validate_payload(payload)
-
-        # TODO Por hora, existe um campo userEmail no body, mas depois será trocado pela logica do COgnito
-        # TODO Remove the validate_request_source logic after integrating with Cognito
-        logger.info('Validating the request source (user email)')
-        validate_request_source(payload.get('userEmail'))
-        logger.info(f"Request source validated for user: {payload.get('userEmail')}")
 
         # Normalize and validate phone
         raw_phone = payload.get('phone', '')

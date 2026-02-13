@@ -2,12 +2,11 @@
   "httpMethod": "GET",
   "path": "/leads/fetch_reminders",
   "queryStringParameters": {
-    "companyID": "896504cc-bd92-448b-bc92-74bfcd2c73c2",
-    "userEmail": "antonio.filho@auditik.com.br"
+    "companyID": "896504cc-bd92-448b-bc92-74bfcd2c73c2"
   },
   "headers": {
     "Content-Type": "application/json",
-    "x-api-key": "test-api-key"
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1cy1lYXN0LTFfNGRjR3cxa1ZLXzEyMzQ1Njc4LWFiY2QtZWZnaC1pams9IiwiZW1haWwiOiJhbnRvbmlvLmZpbGhvQGF1ZGl0aWsuY29tLmJyIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImNvZ25pdG86dXNlcm5hbWUiOiJhbnRvbmlvLmZpbGhvQGF1ZGl0aWsuY29tLmJyIiwiYXVkIjoiYWJjZGVmMTIzNDU2In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
   },
   "requestContext": {
     "identity": {
@@ -21,7 +20,21 @@
     "resourceId": "test-resource-id",
     "accountId": "819774487459",
     "apiId": "test-api-id",
-    "authorizer": {}
+    "authorizer": {
+      "claims": {
+        "sub": "us-east-1_4dcGw1kVK_12345678-abcd-efgh-ijkl=",
+        "email": "antonio.filho@auditik.com.br",
+        "email_verified": "true",
+        "cognito:username": "antonio.filho@auditik.com.br",
+        "aud": "abcdef123456",
+        "event_id": "e3db11e0-dedb-11ed-d418-ac26b9b5f00",
+        "token_use": "id",
+        "auth_time": "1739232832",
+        "iss": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_4dcGw1kVK",
+        "name": "Antonio Filho",
+        "phone_number": "+55 11 99999-9999"
+      }
+    }
   },
   "isBase64Encoded": false
 }
