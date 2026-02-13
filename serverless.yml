@@ -655,8 +655,6 @@ functions:
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
       AUTH_CODES_TABLE: ${self:provider.stage}-auris-auth-codes
       AWS_REGION_NAME: ${self:provider.region}
-      SES_FROM_EMAIL_DEV: ${env:SES_FROM_EMAIL_DEV}
-      SES_FROM_EMAIL_PROD: ${env:SES_FROM_EMAIL_PROD}
     iamRoleStatements:
       - Effect: Allow
         Action:
