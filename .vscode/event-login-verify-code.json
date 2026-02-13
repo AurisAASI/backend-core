@@ -1,0 +1,8 @@
+{
+  "httpMethod": "POST",
+  "path": "/login",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"stage\": \"verifyCode\", \"email\": \"antonio.filho@auditik.com.br\", \"shortCode\": \"703892\", \"challengeId\": \"challenge-8163b119-99d2-4054-88a8-b36ff3140596\", \"rememberMe\": true}"
+}

@@ -11,13 +11,28 @@ provider:
   region: ${opt:region, 'us-east-1'}
   memorySize: 128
   timeout: 30
+  deploymentBucket:
+    maxPreviousDeploymentArtifacts: 5
   environment:
     # Global environment variables
     ACCOUNT_ID: ${env:AWS_ACCOUNT_ID, '819774487459'}
     STAGE: ${self:provider.stage}
     REGION: ${self:provider.region}
+    
     # API Key from AWS Cognito stored in environment
     API_KEY: ${env:API_KEY, ''}
+
+    #Authentication configuration
+    COGNITO_USER_POOL_ID_DEV: ${env:COGNITO_USER_POOL_ID_DEV}
+    COGNITO_USER_POOL_ID_PROD: ${env:COGNITO_USER_POOL_ID_PROD}
+    COGNITO_APP_CLIENT_ID_DEV: ${env:COGNITO_APP_CLIENT_ID_DEV}
+    COGNITO_APP_CLIENT_ID_PROD: ${env:COGNITO_APP_CLIENT_ID_PROD}
+    AUTH_CODE_VALIDITY_MINUTES: ${env:AUTH_CODE_VALIDITY_MINUTES, '5'}
+    AUTH_CODE_MAX_ATTEMPTS: ${env:AUTH_CODE_MAX_ATTEMPTS, '3'}
+    AUTH_CODE_LENGTH: ${env:AUTH_CODE_LENGTH, '6'}
+    SES_FROM_EMAIL_DEV: ${env:SES_FROM_EMAIL_DEV}
+    SES_FROM_EMAIL_PROD: ${env:SES_FROM_EMAIL_PROD}
+
     # Google Places API configuration (stage-specific)
     GOOGLE_PLACES_API_KEY_DEV: ${env:GOOGLE_PLACES_API_KEY_DEV, ''}
     GOOGLE_PLACES_API_KEY_PROD: ${env:GOOGLE_PLACES_API_KEY_PROD, ''}
@@ -81,6 +96,64 @@ package:
     - '!**/*.pyc'
 
 functions:
+  # Cognito Custom Auth Triggers
+  cognitoDefineAuthChallenge:
+    handler: src/functions/cognito_triggers/define_auth_challenge.lambda_handler
+    description: Cognito trigger to define custom authentication challenge flow
+    timeout: 5
+    memorySize: 128
+    package:
+      patterns:
+        - src/functions/cognito_triggers/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: cognito_define_auth_challenge
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+
+  cognitoCreateAuthChallenge:
+    handler: src/functions/cognito_triggers/create_auth_challenge.lambda_handler
+    description: Cognito trigger to create custom authentication challenge
+    timeout: 5
+    memorySize: 128
+    package:
+      patterns:
+        - src/functions/cognito_triggers/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: cognito_create_auth_challenge
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+
+  cognitoVerifyAuthChallengeResponse:
+    handler: src/functions/cognito_triggers/verify_auth_challenge_response.lambda_handler
+    description: Cognito trigger to verify custom authentication challenge response
+    timeout: 10
+    memorySize: 256
+    package:
+      patterns:
+        - src/functions/cognito_triggers/**
+        - src/shared/**
+    environment:
+      FUNCTION_NAME: cognito_verify_auth_challenge_response
+      AUTH_CODES_TABLE: ${self:provider.stage}-auris-auth-codes
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:Query
+          - dynamodb:UpdateItem
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-auth-codes
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-auth-codes/index/*
+      - Effect: Allow
+        Action:
+          - dynamodb:ListTables
+        Resource: "*"
+    layers:
+      - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:cognito_verify_auth_challenge_response:1
+
   city_collector:
     handler: src/functions/city_collector/handler.city_collector
     description: City Collector Lambda function
@@ -236,15 +309,37 @@ functions:
 
   gl_add_new_lead:
     handler: src/functions/gl_add_new_lead/add_new_lead_handler.add_new_lead
-    description: HTTP endpoint for creating new leads in the CRM system
+    description: HTTP endpoint for creating new leads in the CRM system (Cognito authentication required)
     timeout: 29
     memorySize: 256
     events:
       - http:
           path: leads
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 86400
+      - http:
+          path: leads
           method: post
-          cors: true
-          private: true  # Require API key
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 86400
+          authorizer:
+            type: COGNITO_USER_POOLS
+            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
     package:
       patterns:
         - src/functions/gl_add_new_lead/**
@@ -279,7 +374,7 @@ functions:
 
   gl_database_import_generate_url:
     handler: src/functions/gl_database_import/gl_database_import_handler.generate_presigned_upload_url
-    description: Generate pre-signed S3 URL for database import file upload
+    description: Generate pre-signed S3 URL for database import file upload (Cognito authentication required)
     timeout: 29
     memorySize: 256
     events:
@@ -309,7 +404,9 @@ functions:
               - X-Api-Key
             allowCredentials: false
             maxAge: 3600
-          private: true  # Require API key
+          authorizer:
+            type: COGNITO_USER_POOLS
+            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
     package:
       patterns:
         - src/functions/gl_database_import/**
@@ -422,7 +519,7 @@ functions:
 
   gl_database_import_status:
     handler: src/functions/gl_database_import/gl_database_import_handler.get_import_status
-    description: Get database import status with timeout detection
+    description: Get database import status with timeout detection (Cognito authentication required)
     timeout: 10
     memorySize: 256
     events:
@@ -452,7 +549,9 @@ functions:
               - X-Api-Key
             allowCredentials: false
             maxAge: 3600
-          private: true  # Require API key
+          authorizer:
+            type: COGNITO_USER_POOLS
+            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
     package:
       patterns:
         - src/functions/gl_database_import/**
@@ -524,12 +623,29 @@ functions:
       - http:
           path: login
           method: post
-          cors: true
-          private: true  # Require API key
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-api-key
+              - X-Amz-Date
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
       - http:
           path: login
           method: options
-          cors: true
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - x-api-key
+              - X-Amz-Date
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
     package:
       patterns:
         - src/functions/gl_login/**
@@ -537,7 +653,10 @@ functions:
     environment:
       FUNCTION_NAME: gl_login
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      AUTH_CODES_TABLE: ${self:provider.stage}-auris-auth-codes
       AWS_REGION_NAME: ${self:provider.region}
+      SES_FROM_EMAIL_DEV: ${env:SES_FROM_EMAIL_DEV}
+      SES_FROM_EMAIL_PROD: ${env:SES_FROM_EMAIL_PROD}
     iamRoleStatements:
       - Effect: Allow
         Action:
@@ -546,23 +665,74 @@ functions:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-companies
       - Effect: Allow
         Action:
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-auth-codes
+      - Effect: Allow
+        Action:
           - dynamodb:ListTables
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - ses:SendEmail
+          - ses:SendRawEmail
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - ses:GetAccount
+          - ses:GetSendQuota
+          - ses:GetSendStatistics
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - cognito-idp:AdminCreateUser
+          - cognito-idp:AdminEnableUser
+          - cognito-idp:AdminConfirmSignUp
+          - cognito-idp:AdminUpdateUserAttributes
+          - cognito-idp:ListUsers
+          - cognito-idp:InitiateAuth
+          - cognito-idp:RespondToAuthChallenge
         Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_login:1
+      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_login:2
 
   gl_fetch_leads:
     handler: src/functions/gl_fetch_leads/fetch_leads_handler.fetch_leads_reminders
-    description: HTTP endpoint for fetching lead based on reminders date and company ID
+    description: HTTP endpoint for fetching lead based on reminders date and company ID (Cognito authentication required)
     timeout: 29
     memorySize: 256
     events:
       - http:
           path: leads/fetch_reminders
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 86400
+      - http:
+          path: leads/fetch_reminders
           method: get
-          cors: true
-          private: true  # Require API key
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 86400
+          authorizer:
+            type: COGNITO_USER_POOLS
+            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
     package:
       patterns:
         - src/functions/gl_fetch_leads/**
@@ -591,15 +761,37 @@ functions:
 
   gl_fetch_lead_history:
     handler: src/functions/gl_fetch_lead_history/fetch_lead_history_handler.fetch_lead_history
-    description: HTTP endpoint for fetching organized communication history by communicationIDs and company ID
+    description: HTTP endpoint for fetching organized communication history by communicationIDs and company ID (Cognito authentication required)
     timeout: 29
     memorySize: 256
     events:
       - http:
           path: leads/fetch_history
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 86400
+      - http:
+          path: leads/fetch_history
           method: post
-          cors: true
-          private: true  # Require API key
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 86400
+          authorizer:
+            type: COGNITO_USER_POOLS
+            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
     package:
       patterns:
         - src/functions/gl_fetch_lead_history/**
@@ -655,15 +847,37 @@ functions:
 
   gl_communication_registration:
     handler: src/functions/gl_communication_registration/gl_communication_registration_handler.communication_registration
-    description: Register communications and update lead records with validation (HTTP endpoint or invoked by gl_queue_manager)
+    description: Register communications and update lead records with validation (Cognito authentication required for HTTP endpoint, or invoked by gl_queue_manager)
     timeout: 29
     memorySize: 256
     events:
       - http:
           path: leads/communication_register
+          method: options
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 86400
+      - http:
+          path: leads/communication_register
           method: post
-          cors: true
-          private: true  # Require API key
+          cors:
+            origin: '*'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Amz-Date
+              - X-Api-Key
+            allowCredentials: false
+            maxAge: 86400
+          authorizer:
+            type: COGNITO_USER_POOLS
+            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
     package:
       patterns:
         - src/functions/gl_communication_registration/**
@@ -701,15 +915,16 @@ plugins:
   - serverless-add-api-key
 
 custom:
+  # Cognito User Pool ARN for the current stage
+  cognitoUserPoolArn:
+    dev: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_DEV}
+    prod: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_PROD}
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
     description: API key for ${self:service} service in ${self:provider.stage} stage
 
 resources:
   Resources:
-    # DynamoDB Tables are managed externally (already exist)
-    # Tables: ${self:provider.stage}-auris-core-companies, ${self:provider.stage}-auris-core-places
-
     # SQS Queues
     ScraperTaskQueue:
       Type: AWS::SQS::Queue
