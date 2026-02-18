@@ -340,6 +340,7 @@ functions:
           authorizer:
             type: COGNITO_USER_POOLS
             arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
+            name: CognitoAuthorizer
     package:
       patterns:
         - src/functions/gl_add_new_lead/**
@@ -407,6 +408,7 @@ functions:
           authorizer:
             type: COGNITO_USER_POOLS
             arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
+            name: CognitoAuthorizer
     package:
       patterns:
         - src/functions/gl_database_import/**
@@ -552,6 +554,7 @@ functions:
           authorizer:
             type: COGNITO_USER_POOLS
             arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
+            name: CognitoAuthorizer
     package:
       patterns:
         - src/functions/gl_database_import/**
@@ -739,6 +742,7 @@ functions:
           authorizer:
             type: COGNITO_USER_POOLS
             arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
+            name: CognitoAuthorizer
     package:
       patterns:
         - src/functions/gl_fetch_leads/**
@@ -798,6 +802,7 @@ functions:
           authorizer:
             type: COGNITO_USER_POOLS
             arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
+            name: CognitoAuthorizer
     package:
       patterns:
         - src/functions/gl_fetch_lead_history/**
@@ -884,6 +889,7 @@ functions:
           authorizer:
             type: COGNITO_USER_POOLS
             arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
+            name: CognitoAuthorizer
     package:
       patterns:
         - src/functions/gl_communication_registration/**
