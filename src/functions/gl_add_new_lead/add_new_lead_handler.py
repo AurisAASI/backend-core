@@ -279,7 +279,7 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if payload.get('statusLead')
             else 'Aguardando contato'
         )
-        
+
         # Use observation if provided from import, otherwise use default message
         if payload.get('observation'):
             observation = str(payload.get('observation')).strip()
