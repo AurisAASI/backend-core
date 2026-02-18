@@ -922,10 +922,14 @@ plugins:
   - serverless-add-api-key
 
 custom:
+  # Serverless Dotenv Plugin Configuration
+  # AWS credentials come from AWS CLI/IAM roles, not .env
+  dotenv:
+    path: ./.env
   # Cognito User Pool ARN for the current stage
   cognitoUserPoolArn:
-    dev: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_DEV}
-    prod: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_PROD}
+    dev: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_DEV, 'placeholder-dev-user-pool-id'}
+    prod: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_PROD, 'placeholder-prod-user-pool-id'}
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
     description: API key for ${self:service} service in ${self:provider.stage} stage
