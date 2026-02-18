@@ -237,7 +237,7 @@ def generate_presigned_upload_url(
         # Generate unique import ID and S3 key
         import_id = f'import-{str(uuid.uuid4())}'
         date_prefix = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-        s3_key = f'uploads/{company_id}/{date_prefix}/{import_id}_file_{file_name}'
+        s3_key = f'uploads/{settings.stage}/{company_id}/{date_prefix}/{import_id}_file_{file_name}'
 
         # Calculate TTL (30 days from now)
         ttl_timestamp = int(
@@ -368,7 +368,7 @@ def database_import_orchestrator(event: Dict[str, Any], context: Any) -> Dict[st
         bucket_name = record['s3']['bucket']['name']
         object_key = record['s3']['object']['key']
 
-        # Extract importID from key pattern: uploads/{companyID}/{date}/{importID}_file_{fileName}
+        # Extract importID from key pattern: uploads/{stage}/{companyID}/{date}/{importID}_file_{fileName}
         import_id_match = re.search(r'/(import-[a-f0-9-]+)_file_', object_key)
         if not import_id_match:
             raise ValueError(
@@ -462,7 +462,7 @@ def database_import_orchestrator(event: Dict[str, Any], context: Any) -> Dict[st
         date_prefix = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
         # Move original file to processed folder
-        processed_key = f'processed/{company_id}/{date_prefix}/{import_id}-{file_name}'
+        processed_key = f'processed/{settings.stage}/{company_id}/{date_prefix}/{import_id}-{file_name}'
         s3_client.copy_object(
             Bucket=bucket_name,
             CopySource={'Bucket': bucket_name, 'Key': object_key},
@@ -971,7 +971,7 @@ def _generate_results_file(
 
     # Upload to S3
     date_prefix = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    results_key = f'results/{company_id}/{date_prefix}/{import_id}-results.csv'
+    results_key = f'results/{settings.stage}/{company_id}/{date_prefix}/{import_id}-results.csv'
 
     s3_client.upload_file(
         results_file_path,
