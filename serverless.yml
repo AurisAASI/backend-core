@@ -60,6 +60,7 @@ provider:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
+            - logs:DeleteLogGroup
           Resource: "arn:aws:logs:*:*:*"
 
 package:
