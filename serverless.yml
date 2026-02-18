@@ -23,8 +23,8 @@ provider:
     API_KEY: ${env:API_KEY, ''}
 
     #Authentication configuration
-    COGNITO_USER_POOL_ID_DEV: ${env:COGNITO_USER_POOL_ID_DEV, 'placeholder-dev'}
-    COGNITO_USER_POOL_ID_PROD: ${env:COGNITO_USER_POOL_ID_PROD, 'placeholder-prod'}
+    COGNITO_USER_POOL_ID_DEV: ${env:COGNITO_USER_POOL_ID_DEV, 'us-east-1_DEVDEVDEV'}
+    COGNITO_USER_POOL_ID_PROD: ${env:COGNITO_USER_POOL_ID_PROD, 'us-east-1_PRODPRODPD'}
     COGNITO_APP_CLIENT_ID_DEV: ${env:COGNITO_APP_CLIENT_ID_DEV, 'placeholder-dev'}
     COGNITO_APP_CLIENT_ID_PROD: ${env:COGNITO_APP_CLIENT_ID_PROD, 'placeholder-prod'}
     AUTH_CODE_VALIDITY_MINUTES: ${env:AUTH_CODE_VALIDITY_MINUTES, '5'}
@@ -928,8 +928,8 @@ custom:
     path: ./.env
   # Cognito User Pool ARN for the current stage
   cognitoUserPoolArn:
-    dev: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_DEV, 'placeholder-dev-user-pool-id'}
-    prod: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${env:COGNITO_USER_POOL_ID_PROD, 'placeholder-prod-user-pool-id'}
+    dev: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${self:provider.environment.COGNITO_USER_POOL_ID_DEV}
+    prod: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${self:provider.environment.COGNITO_USER_POOL_ID_PROD}
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
     description: API key for ${self:service} service in ${self:provider.stage} stage
