@@ -932,6 +932,7 @@ custom:
   # AWS credentials come from AWS CLI/IAM roles, not .env
   dotenv:
     path: ./.env
+    override: true
   # Cognito User Pool ARN for the current stage
   cognitoUserPoolArn:
     dev: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:userpool/${env:COGNITO_USER_POOL_ID_DEV, 'us-east-1_4dcGw1kVK'}
