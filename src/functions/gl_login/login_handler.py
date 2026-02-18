@@ -151,31 +151,28 @@ def send_code_email(email: str, code: str) -> None:
     Raises:
         ClientError: If SES send fails
     """
-    subject = 'Seu código de autenticação Auris'
+    subject = 'Seu código de autenticação Lead Control'
     html_body = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
         <head>
             <meta charset="utf-8" />
             <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-            <title>Codigo de Acesso - Auris Saude</title>
+            <title>Codigo de Acesso - Lead Control</title>
         </head>
         <body style="margin: 0; padding: 0; background-color: #f3f4f6; color: #1f2937; font-family: Arial, Helvetica, sans-serif;">
             <div style="padding: 24px 16px;">
                 <div style="max-width: 480px; margin: 0 auto;">
                     <div style="background-color: #ffffff; border: 1px solid #f1f5f9; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);">
                         <div style="padding: 32px 32px 0 32px; text-align: center;">
-                            <div style="display: inline-flex; align-items: center; gap: 10px; margin-bottom: 28px;">
-                                <div style="height: 40px; width: 40px; border-radius: 999px; background-color: rgba(56, 178, 172, 0.12); display: inline-flex; align-items: center; justify-content: center; color: #38b2ac; font-weight: 700;">
-                                    A
-                                </div>
-                                <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #1f2937;">Auris Saude</span>
+                            <div style="margin-bottom: 28px;">
+                                <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #1f2937;">Lead Control</span>
                             </div>
                         </div>
                         <div style="padding: 0 32px 32px 32px; text-align: center;">
                             <h1 style="font-size: 22px; font-weight: 700; color: #111827; margin: 0 0 12px 0;">Seu código de acesso chegou</h1>
                             <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">
-                                Utilize o código abaixo para validar sua identidade e acessar o CRM da Auris Saude.
+                                Utilize o código abaixo para validar sua identidade e acessar o sistema da Lead Control.
                             </p>
                             <div style="background-color: #38b2ac; border-radius: 12px; padding: 18px 12px; margin: 0 0 24px 0;">
                                 <span style="display: inline-block; font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; letter-spacing: 0.4em; color: #ffffff; padding-left: 0.2em;">{code}</span>
@@ -192,10 +189,10 @@ def send_code_email(email: str, code: str) -> None:
                     </div>
                     <div style="margin-top: 24px; text-align: center; padding: 0 8px;">
                         <p style="font-size: 12px; color: #6b7280; font-weight: 600; margin: 0 0 6px 0;">
-                            Auris Saude Auditiva &amp; Clinical Management
+                            Lead Control Auditiva &amp; Clinical Management
                         </p>
                         <p style="font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.2em; margin: 0;">
-                            &copy; {datetime.now().year} Auris Saude. Todos os direitos reservados.
+                            &copy; {datetime.now().year} Lead Control. Todos os direitos reservados.
                         </p>
                     </div>
                 </div>
@@ -205,7 +202,7 @@ def send_code_email(email: str, code: str) -> None:
     """
 
     text_body = f"""
-Auris Saude - Código de Acesso
+Lead Control - Código de Acesso
 
 Seu código: {code}
 
@@ -213,7 +210,7 @@ Este código é válido por {settings.auth_code_validity_minutes} minutos.
 
 Se você não solicitou este acesso, ignore este email.
 
-© {datetime.now().year} Auris Saude. Todos os direitos reservados.
+© {datetime.now().year} Lead Control. Todos os direitos reservados.
     """
 
     try:
@@ -301,54 +298,75 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     """
     Fetch user information from database by email.
 
-    NOTE: This is a simplified implementation that searches the companies table.
-    For production, consider using a dedicated users table with GSI on email.
+    Queries the dedicated users table using email GSI for efficient O(1) lookups.
+    This eliminates the need to scan the companies table and provides better scalability.
 
     Args:
         email: User email address
 
     Returns:
         User dictionary with userId, companyId, email if found, None otherwise
+
+    DynamoDB Table Structure:
+    Table: <stage>-auris-core-companies-users
+    - PrimaryKey: userID (String)
+    - GSI: userEmailIndex
+      - PartitionKey: user_email (String)
+      - SortKey: userID (String)
+
+    Item Schema:
+    {
+        "userID": "usr_550e8400e29b41d4a716446655440000",
+        "user_email": "user@company.com",
+        "user_name": "João da Silva",
+        "companyID": "896504cc-bd92-448b-bc92-74bfcd2c73c2",
+        "status": "ativo",
+        "permission": "manager",
+        "job": "Gerente",
+        "createdAt": 1677600000,
+        "updatedAt": 1677600000
+    }
     """
     try:
-        companies_db = DatabaseHandler(table_name=settings.companies_table_name)
+        users_db = DatabaseHandler(table_name=settings.users_table_name)
 
-        # For MVP, we'll search in the hardcoded company
-        # TODO: Implement proper multi-company user lookup
-        # TODO: REVISAR A TABELA companies PARA QUE users SEJA UMA LISTA INDICES DA TABELA users, COM GSI PARA CONSULTA POR EMAIL
-        company_id = '896504cc-bd92-448b-bc92-74bfcd2c73c2'
-
-        company_response = companies_db._deserialize_item(
-            companies_db.get_item(key={'companyID': company_id})
+        # Query using GSI on user_email for efficient O(1) lookup
+        # Access the boto3 client from DatabaseHandler to perform GSI query
+        response = users_db.client.query(
+            TableName=settings.users_table_name,
+            IndexName='userEmailIndex',
+            KeyConditionExpression='user_email = :email',
+            ExpressionAttributeValues={
+                ':email': {'S': email.lower()},
+            },
         )
 
-        if not company_response:
+        # Deserialize items from DynamoDB format
+        items_raw = response.get('Items', [])
+        items = (
+            [users_db._deserialize_item(item) for item in items_raw]
+            if items_raw
+            else []
+        )
+
+        if not items:
+            logger.info(f'User with email {email} not found')
             return None
 
-        users = company_response.get('users', [])
-        if not isinstance(users, list):
+        # Get first matching user (user_email should be unique)
+        user_item = items[0]
+
+        # Verify user is active
+        if user_item.get('status', '').lower() != 'ativo':
+            logger.warning(f'User {email} is not active')
             return None
 
-        # Search for user with matching email
-        for users_list in users:
-            for user in users_list:
-                if (
-                    isinstance(user, dict)
-                    and user.get('user_email', '').lower() == email.lower()
-                ):
-                    # Verify user is active
-                    if user.get('status', '').lower() != 'ativo':
-                        logger.warning(f'User {email} is not active')
-                        return None
-
-                    return {
-                        'userId': user.get('userID', ''),
-                        'companyId': company_id,
-                        'email': email,
-                        'userName': user.get('user_name', ''),
-                    }
-
-        return None
+        return {
+            'userId': user_item.get('userID', ''),
+            'companyId': user_item.get('companyID', ''),
+            'email': email,
+            'userName': user_item.get('user_name', ''),
+        }
 
     except Exception as e:
         logger.error(f'Error fetching user by email: {str(e)}', exc_info=True)

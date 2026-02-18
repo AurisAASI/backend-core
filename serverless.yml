@@ -653,6 +653,7 @@ functions:
     environment:
       FUNCTION_NAME: gl_login
       COMPANIES_TABLE: ${self:provider.stage}-auris-core-companies
+      USERS_TABLE: ${self:provider.stage}-auris-core-companies-users
       AUTH_CODES_TABLE: ${self:provider.stage}-auris-auth-codes
       AWS_REGION_NAME: ${self:provider.region}
     iamRoleStatements:
@@ -661,6 +662,13 @@ functions:
           - dynamodb:GetItem
         Resource:
           - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-companies
+      - Effect: Allow
+        Action:
+          - dynamodb:GetItem
+          - dynamodb:Query
+        Resource:
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-companies-users
+          - arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/${self:provider.stage}-auris-core-companies-users/index/userEmailIndex
       - Effect: Allow
         Action:
           - dynamodb:GetItem

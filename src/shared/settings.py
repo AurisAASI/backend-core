@@ -91,6 +91,14 @@ class Settings:
             f'{self.stage}-auris-auth-codes',
         )
 
+    @property
+    def users_table_name(self) -> str:
+        """Get the company users DynamoDB table name for current stage."""
+        return os.environ.get(
+            'USERS_TABLE',
+            f'{self.stage}-auris-core-companies-users',
+        )
+
     # TODO Vericicar a chamada dessa função aqui que elenca as tabelas... talvez está em desuso e possa ser removida
     def get_table_name(
         self, table_type: Literal['companies', 'places', 'leads', 'leads']
