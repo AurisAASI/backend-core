@@ -31,6 +31,9 @@ CORS_HEADERS = {
     'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,PUT,DELETE',
 }
 
+# Message constraints
+MAX_MESSAGE_LENGTH = 1000  # Maximum characters for communication message
+
 # Load communication history schema template
 COMM_HISTORY_SCHEMA_PATH = (
     Path(__file__).parent.parent.parent
@@ -286,6 +289,15 @@ def create_communication_entry(
     # Generate communication ID and timestamp
     comm_id = 'comm-' + generate_uuid()
 
+    # Truncate message to maximum allowed length if needed
+    message_content = message.strip()
+    if len(message_content) > MAX_MESSAGE_LENGTH:
+        logger.warning(
+            f'Message truncated from {len(message_content)} to '
+            f'{MAX_MESSAGE_LENGTH} characters for lead {lead_id}'
+        )
+        message_content = message_content[:MAX_MESSAGE_LENGTH]
+
     # Build communication data using schema template
     comm_data = COMM_HISTORY_SCHEMA.copy()
     comm_data['communicationID'] = comm_id
@@ -295,7 +307,7 @@ def create_communication_entry(
     comm_data['communicationDate'] = communication_date
     comm_data['status'] = status
     comm_data['source'] = source
-    comm_data['message'] = message.strip()
+    comm_data['message'] = message_content
 
     # Remove empty strings
     comm_data = {k: v for k, v in comm_data.items() if v != ''}
