@@ -152,7 +152,7 @@ functions:
         Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:cognito_verify_auth_challenge_response:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:cognito_verify_auth_challenge_response:1
 
   city_collector:
     handler: src/functions/city_collector/handler.city_collector
@@ -185,7 +185,7 @@ functions:
           - sqs:SendMessage
         Resource: !GetAtt ScraperTaskQueue.Arn
     layers:
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:city_collector_layer:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:city_collector_layer:1
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
   gmaps_scrapper:
@@ -229,7 +229,7 @@ functions:
         Resource: !GetAtt WebsiteScraperTaskQueue.Arn
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gmaps_scrapper:2
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gmaps_scrapper:2
 
   website_scrapper:
     handler: src/functions/data_scrapper/website_handler.website_scrapper
@@ -271,7 +271,7 @@ functions:
         Resource: !GetAtt CompanyFederalScraperTaskQueue.Arn
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:website_scrapper:3
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:website_scrapper:3
 
   company_federal_scrapper:
     handler: src/functions/data_scrapper/company_federal_handler.company_federal_scrapper
@@ -305,7 +305,7 @@ functions:
           - "arn:aws:dynamodb:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:table/*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:company_federal_scrapper:2
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:company_federal_scrapper:2
 
   gl_add_new_lead:
     handler: src/functions/gl_add_new_lead/add_new_lead_handler.add_new_lead
@@ -372,7 +372,7 @@ functions:
         Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_add_new_lead:3
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_add_new_lead:3
 
   gl_database_import_generate_url:
     handler: src/functions/gl_database_import/gl_database_import_handler.generate_presigned_upload_url
@@ -446,7 +446,7 @@ functions:
           - arn:aws:s3:::auris-database-imports/*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_database_import:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_database_import:1
 
   gl_database_import_orchestrator:
     handler: src/functions/gl_database_import/gl_database_import_handler.database_import_orchestrator
@@ -519,7 +519,7 @@ functions:
           - !GetAtt OperationsQueue.Arn
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_database_import:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_database_import:1
 
   gl_database_import_status:
     handler: src/functions/gl_database_import/gl_database_import_handler.get_import_status
@@ -589,7 +589,7 @@ functions:
           - arn:aws:s3:::auris-database-imports/*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_database_import:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_database_import:1
 
   gl_add_new_company:
     handler: src/functions/gl_add_new_company/add_new_company_handler.add_new_company
@@ -710,7 +710,7 @@ functions:
         Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_login:2
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_login:2
 
   gl_fetch_leads:
     handler: src/functions/gl_fetch_leads/fetch_leads_handler.fetch_leads_reminders
@@ -771,7 +771,7 @@ functions:
         Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_fetch_leads:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_fetch_leads:1
 
   gl_fetch_lead_history:
     handler: src/functions/gl_fetch_lead_history/fetch_lead_history_handler.fetch_lead_history
@@ -832,7 +832,7 @@ functions:
         Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_fetch_lead_history:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_fetch_lead_history:1
 
   gl_queue_manager:
     handler: src/functions/gl_queue_manager/gl_queue_manager_handler.gl_queue_manager
@@ -859,7 +859,7 @@ functions:
           - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:function:${self:service}-${self:provider.stage}-*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_queue_manager:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_queue_manager:1
 
   gl_communication_registration:
     handler: src/functions/gl_communication_registration/gl_communication_registration_handler.communication_registration
@@ -926,7 +926,7 @@ functions:
         Resource: "*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_communication_registration:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_communication_registration:1
 
 plugins:
   - serverless-dotenv-plugin
