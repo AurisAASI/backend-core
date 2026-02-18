@@ -339,8 +339,9 @@ functions:
             maxAge: 86400
           authorizer:
             type: COGNITO_USER_POOLS
-            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
-            name: CognitoAuthorizer
+            arn:
+              - ${self:custom.cognitoUserPoolArn.${sls:stage}}
+            name: ${self:service}-${sls:stage}-cognito-authorizer
     package:
       patterns:
         - src/functions/gl_add_new_lead/**
@@ -407,8 +408,9 @@ functions:
             maxAge: 3600
           authorizer:
             type: COGNITO_USER_POOLS
-            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
-            name: CognitoAuthorizer
+            arn:
+              - ${self:custom.cognitoUserPoolArn.${sls:stage}}
+            name: ${self:service}-${sls:stage}-cognito-authorizer
     package:
       patterns:
         - src/functions/gl_database_import/**
@@ -553,8 +555,9 @@ functions:
             maxAge: 3600
           authorizer:
             type: COGNITO_USER_POOLS
-            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
-            name: CognitoAuthorizer
+            arn:
+              - ${self:custom.cognitoUserPoolArn.${sls:stage}}
+            name: ${self:service}-${sls:stage}-cognito-authorizer
     package:
       patterns:
         - src/functions/gl_database_import/**
@@ -741,8 +744,9 @@ functions:
             maxAge: 86400
           authorizer:
             type: COGNITO_USER_POOLS
-            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
-            name: CognitoAuthorizer
+            arn:
+              - ${self:custom.cognitoUserPoolArn.${sls:stage}}
+            name: ${self:service}-${sls:stage}-cognito-authorizer
     package:
       patterns:
         - src/functions/gl_fetch_leads/**
@@ -801,8 +805,9 @@ functions:
             maxAge: 86400
           authorizer:
             type: COGNITO_USER_POOLS
-            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
-            name: CognitoAuthorizer
+            arn:
+              - ${self:custom.cognitoUserPoolArn.${sls:stage}}
+            name: ${self:service}-${sls:stage}-cognito-authorizer
     package:
       patterns:
         - src/functions/gl_fetch_lead_history/**
@@ -888,8 +893,9 @@ functions:
             maxAge: 86400
           authorizer:
             type: COGNITO_USER_POOLS
-            arn: ${self:custom.cognitoUserPoolArn.${self:provider.stage}}
-            name: CognitoAuthorizer
+            arn:
+              - ${self:custom.cognitoUserPoolArn.${sls:stage}}
+            name: ${self:service}-${sls:stage}-cognito-authorizer
     package:
       patterns:
         - src/functions/gl_communication_registration/**
@@ -935,7 +941,7 @@ custom:
     override: true
   # Cognito User Pool ARN for the current stage
   cognitoUserPoolArn:
-    dev: aarn:aws:cognito-idp:us-east-1:819774487459:userpool/us-east-1_4dcGw1kVK
+    dev: arn:aws:cognito-idp:us-east-1:819774487459:userpool/us-east-1_4dcGw1kVK
     prod: arn:aws:cognito-idp:us-east-1:819774487459:userpool/us-east-1_A98Kq5gM6
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
