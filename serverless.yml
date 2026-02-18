@@ -198,7 +198,7 @@ functions:
           - sqs:SendMessage
         Resource: !GetAtt ScraperTaskQueue.Arn
     layers:
-      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:city_collector_layer:1
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:city_collector_layer:2
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
 
   gmaps_scrapper:
@@ -318,7 +318,7 @@ functions:
           - "arn:aws:dynamodb:${self:provider.region}:${aws:accountId}:table/*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:company_federal_scrapper:2
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:company_federal_scrapper:3
 
   gl_add_new_lead:
     handler: src/functions/gl_add_new_lead/add_new_lead_handler.add_new_lead
