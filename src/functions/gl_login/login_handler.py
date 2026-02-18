@@ -298,54 +298,75 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     """
     Fetch user information from database by email.
 
-    NOTE: This is a simplified implementation that searches the companies table.
-    For production, consider using a dedicated users table with GSI on email.
+    Queries the dedicated users table using email GSI for efficient O(1) lookups.
+    This eliminates the need to scan the companies table and provides better scalability.
 
     Args:
         email: User email address
 
     Returns:
         User dictionary with userId, companyId, email if found, None otherwise
+
+    DynamoDB Table Structure:
+    Table: <stage>-auris-core-companies-users
+    - PrimaryKey: userID (String)
+    - GSI: userEmailIndex
+      - PartitionKey: user_email (String)
+      - SortKey: userID (String)
+
+    Item Schema:
+    {
+        "userID": "usr_550e8400e29b41d4a716446655440000",
+        "user_email": "user@company.com",
+        "user_name": "João da Silva",
+        "companyID": "896504cc-bd92-448b-bc92-74bfcd2c73c2",
+        "status": "ativo",
+        "permission": "manager",
+        "job": "Gerente",
+        "createdAt": 1677600000,
+        "updatedAt": 1677600000
+    }
     """
     try:
-        companies_db = DatabaseHandler(table_name=settings.companies_table_name)
+        users_db = DatabaseHandler(table_name=settings.users_table_name)
 
-        # For MVP, we'll search in the hardcoded company
-        # TODO: Implement proper multi-company user lookup
-        # TODO: REVISAR A TABELA companies PARA QUE users SEJA UMA LISTA INDICES DA TABELA users, COM GSI PARA CONSULTA POR EMAIL
-        company_id = '896504cc-bd92-448b-bc92-74bfcd2c73c2'
-
-        company_response = companies_db._deserialize_item(
-            companies_db.get_item(key={'companyID': company_id})
+        # Query using GSI on user_email for efficient O(1) lookup
+        # Access the boto3 client from DatabaseHandler to perform GSI query
+        response = users_db.client.query(
+            TableName=settings.users_table_name,
+            IndexName='userEmailIndex',
+            KeyConditionExpression='user_email = :email',
+            ExpressionAttributeValues={
+                ':email': {'S': email.lower()},
+            },
         )
 
-        if not company_response:
+        # Deserialize items from DynamoDB format
+        items_raw = response.get('Items', [])
+        items = (
+            [users_db._deserialize_item(item) for item in items_raw]
+            if items_raw
+            else []
+        )
+
+        if not items:
+            logger.info(f'User with email {email} not found')
             return None
 
-        users = company_response.get('users', [])
-        if not isinstance(users, list):
+        # Get first matching user (user_email should be unique)
+        user_item = items[0]
+
+        # Verify user is active
+        if user_item.get('status', '').lower() != 'ativo':
+            logger.warning(f'User {email} is not active')
             return None
 
-        # Search for user with matching email
-        for users_list in users:
-            for user in users_list:
-                if (
-                    isinstance(user, dict)
-                    and user.get('user_email', '').lower() == email.lower()
-                ):
-                    # Verify user is active
-                    if user.get('status', '').lower() != 'ativo':
-                        logger.warning(f'User {email} is not active')
-                        return None
-
-                    return {
-                        'userId': user.get('userID', ''),
-                        'companyId': company_id,
-                        'email': email,
-                        'userName': user.get('user_name', ''),
-                    }
-
-        return None
+        return {
+            'userId': user_item.get('userID', ''),
+            'companyId': user_item.get('companyID', ''),
+            'email': email,
+            'userName': user_item.get('user_name', ''),
+        }
 
     except Exception as e:
         logger.error(f'Error fetching user by email: {str(e)}', exc_info=True)
