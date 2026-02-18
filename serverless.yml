@@ -917,6 +917,7 @@ functions:
       - arn:aws:lambda:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:layer:gl_communication_registration:1
 
 plugins:
+  - serverless-dotenv-plugin
   - serverless-offline
   - serverless-add-api-key
 
