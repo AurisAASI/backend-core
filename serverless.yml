@@ -934,8 +934,8 @@ custom:
     path: ./.env
   # Cognito User Pool ARN for the current stage
   cognitoUserPoolArn:
-    dev: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${self:provider.environment.COGNITO_USER_POOL_ID_DEV}
-    prod: arn:aws:cognito-idp:${self:provider.region}:${self:provider.environment.ACCOUNT_ID}:userpool/${self:provider.environment.COGNITO_USER_POOL_ID_PROD}
+    dev: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:userpool/${env:COGNITO_USER_POOL_ID_DEV, 'us-east-1_DEVDEVDEV'}
+    prod: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:userpool/${env:COGNITO_USER_POOL_ID_PROD, 'us-east-1_PRODPRODPD'}
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
     description: API key for ${self:service} service in ${self:provider.stage} stage
