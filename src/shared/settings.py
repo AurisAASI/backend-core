@@ -6,7 +6,22 @@ across the entire backend-core project, supporting both dev and prod environment
 """
 
 import os
+from pathlib import Path
 from typing import Literal, Optional
+
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+# Locate .env file from the project root (find parent directory containing backend-core structure)
+_current_dir = Path(__file__).resolve().parent  # src/shared
+_project_root = _current_dir.parent.parent  # Go up to project root
+_env_file = _project_root / '.env'
+
+if _env_file.exists():
+    load_dotenv(_env_file, override=True)
+else:
+    # Fallback to current working directory
+    load_dotenv(override=True)
 
 
 class Settings:
@@ -68,6 +83,23 @@ class Settings:
             f'{self.stage}-auris-core-import-status',
         )
 
+    @property
+    def auth_codes_table_name(self) -> str:
+        """Get the authentication codes DynamoDB table name for current stage."""
+        return os.environ.get(
+            'AUTH_CODES_TABLE',
+            f'{self.stage}-auris-auth-codes',
+        )
+
+    @property
+    def users_table_name(self) -> str:
+        """Get the company users DynamoDB table name for current stage."""
+        return os.environ.get(
+            'USERS_TABLE',
+            f'{self.stage}-auris-core-companies-users',
+        )
+
+    # TODO Vericicar a chamada dessa função aqui que elenca as tabelas... talvez está em desuso e possa ser removida
     def get_table_name(
         self, table_type: Literal['companies', 'places', 'leads', 'leads']
     ) -> str:
@@ -191,6 +223,132 @@ class Settings:
             raise ValueError(f'Missing required environment variable: {env_key}')
 
         return api_key
+
+    # AWS Cognito Configuration
+    @property
+    def cognito_user_pool_id(self) -> str:
+        """
+        Get the Cognito User Pool ID for current stage.
+
+        Returns:
+            User Pool ID for the current environment (dev or prod)
+        """
+        env_key = f'COGNITO_USER_POOL_ID_{self.stage.upper()}'
+        pool_id = os.environ.get(env_key, '')
+
+        if not pool_id:
+            raise ValueError(f'Missing required environment variable: {env_key}')
+
+        return pool_id
+
+    @property
+    def cognito_user_pool_id_dev(self) -> Optional[str]:
+        """
+        Get the Cognito User Pool ID for dev stage.
+
+        Returns:
+            User Pool ID for dev environment
+        """
+        return os.environ.get('COGNITO_USER_POOL_ID_DEV', '')
+
+    @property
+    def cognito_user_pool_id_prod(self) -> Optional[str]:
+        """
+        Get the Cognito User Pool ID for prod stage.
+
+        Returns:
+            User Pool ID for prod environment
+        """
+        return os.environ.get('COGNITO_USER_POOL_ID_PROD', '')
+
+    @property
+    def cognito_app_client_id_dev(self) -> str:
+        """
+        Get the Cognito App Client ID for dev stage.
+
+        Returns:
+            App Client ID for dev environment
+
+        Raises:
+            ValueError: If not configured
+        """
+        client_id = os.environ.get('COGNITO_APP_CLIENT_ID_DEV', '')
+        if not client_id:
+            raise ValueError(
+                'Missing required environment variable: COGNITO_APP_CLIENT_ID_DEV'
+            )
+        return client_id
+
+    @property
+    def cognito_app_client_id_prod(self) -> str:
+        """
+        Get the Cognito App Client ID for prod stage.
+
+        Returns:
+            App Client ID for prod environment
+
+        Raises:
+            ValueError: If not configured
+        """
+        client_id = os.environ.get('COGNITO_APP_CLIENT_ID_PROD', '')
+        if not client_id:
+            raise ValueError(
+                'Missing required environment variable: COGNITO_APP_CLIENT_ID_PROD'
+            )
+        return client_id
+
+    @property
+    def cognito_app_client_secret_dev(self) -> Optional[str]:
+        """
+        Get the Cognito App Client Secret for dev stage (optional).
+
+        Returns:
+            App Client Secret for dev environment or empty string
+        """
+        return os.environ.get('COGNITO_APP_CLIENT_SECRET_DEV', '')
+
+    @property
+    def cognito_app_client_secret_prod(self) -> Optional[str]:
+        """
+        Get the Cognito App Client Secret for prod stage (optional).
+
+        Returns:
+            App Client Secret for prod environment or empty string
+        """
+        return os.environ.get('COGNITO_APP_CLIENT_SECRET_PROD', '')
+
+    # AWS SES Configuration
+    @property
+    def ses_from_email(self) -> str:
+        """
+        Get the SES from email address for current stage.
+
+        Returns:
+            SES email address for the current environment
+        """
+        env_key = f'SES_FROM_EMAIL_{self.stage.upper()}'
+        from_email = os.environ.get(env_key, '')
+
+        if not from_email:
+            raise ValueError(f'Missing required environment variable: {env_key}')
+
+        return from_email
+
+    # Authentication Configuration
+    @property
+    def auth_code_validity_minutes(self) -> int:
+        """Get the authentication code validity period in minutes."""
+        return int(os.environ.get('AUTH_CODE_VALIDITY_MINUTES', '5'))
+
+    @property
+    def auth_code_max_attempts(self) -> int:
+        """Get the maximum number of code verification attempts."""
+        return int(os.environ.get('AUTH_CODE_MAX_ATTEMPTS', '3'))
+
+    @property
+    def auth_code_length(self) -> int:
+        """Get the authentication code length."""
+        return int(os.environ.get('AUTH_CODE_LENGTH', '6'))
 
     # Helper Methods
     def get_resource_name(

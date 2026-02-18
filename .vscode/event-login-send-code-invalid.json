@@ -5,5 +5,5 @@
     "Content-Type": "application/json",
     "x-api-key": "test-api-key"
   },
-  "body": "{\"stage\": \"sendCode\", \"email\": \"wrong@email.com.br\", \"rememberMe\": false}"
+  "body": "{\"stage\": \"sendCode\", \"email\": \"invalid-email-format\", \"rememberMe\": false}"
 }

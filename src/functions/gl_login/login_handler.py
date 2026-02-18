@@ -1,31 +1,36 @@
 """
-Lambda handler for user authentication in the Auris CRM system.
+Lambda handler for passwordless email authentication with AWS Cognito.
 
-This module provides HTTP endpoint functionality for user login with:
-- Email-only validation (password removed per requirements)
-- API Gateway event payload extraction and validation
-- Single company user lookup (hardcoded for MVP testing)
-- User status validation (only 'ativo' users allowed)
-- CORS configuration matching other endpoints
-- Cognito integration roadmap with helper stubs
+This module provides HTTP endpoint functionality for three-stage authentication:
 
-TODO-COGNITO: When Cognito is integrated, replace email-based database lookup
-with JWT token validation from Authorization header. See _parse_authorization_header()
-and _validate_jwt_token() stub functions below for integration points.
+Stage 1 - sendCode: Generate and send a 6-digit code via email
+    Stage 2 - verifyCode: Validate the code and return Cognito tokens
+    Stage 3 - refresh: Refresh the access token using the refresh token
 
-TODO-PERFORMANCE: For multi-company support, replace hardcoded companyID with:
-- Option B: Table scan with FilterExpression (interim)
-- Option A: Dedicated users table with GSI on email (final)
-See architecture roadmap for details.
+Authentication Flow:
+1. User enters email -> System sends 6-digit code via SES
+2. User enters code -> System validates and returns access + refresh tokens
+3. Token expires -> System uses refresh token to get new access token from Cognito
+
+Each stage has specific payload requirements and returns structured responses
+with proper error handling and CORS support.
 """
 
+import base64
+import hashlib
+import hmac
 import json
-import re
+import random
+import string
+import uuid
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any, Dict, Optional
 
+import boto3
 from auris_tools.databaseHandlers import DatabaseHandler
 from aws_lambda_powertools import Logger
+from botocore.exceptions import ClientError
 
 from src.shared.settings import Settings
 from src.shared.utils import response
@@ -33,16 +38,18 @@ from src.shared.utils import response
 logger = Logger(service='login')
 settings = Settings()
 
+# AWS clients
+cognito_client = boto3.client('cognito-idp')
+ses_client = boto3.client('ses')
+
+auth_codes_db = DatabaseHandler(table_name=settings.auth_codes_table_name)
+
 # CORS headers to include in all responses
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type,x-api-key,X-Amz-Date,Authorization,X-Api-Key',
     'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,PUT,DELETE',
 }
-
-# TODO-MIGRATION: Replace with Cognito claims extraction when authentication refactored
-# For MVP testing, using hardcoded single company
-HARDCODED_COMPANY_ID = '896504cc-bd92-448b-bc92-74bfcd2c73c2'
 
 
 def extract_payload(event: Dict[str, Any]) -> Dict[str, Any]:
@@ -70,258 +77,1058 @@ def extract_payload(event: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f'Invalid JSON in request body: {str(e)}')
 
 
-def validate_email(email: str) -> None:
-    """
-    Validate email format and prevent malicious inputs.
-
-    Args:
-        email: Email address to validate
-
-    Raises:
-        ValueError: If email is invalid or empty
-    """
-    if not email:
-        raise ValueError('Email is required')
-
-    # Basic email format validation (RFC 5322 simplified)
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_pattern, email):
-        raise ValueError('Invalid email format')
-
-    # Prevent extremely long emails (potential injection)
-    if len(email) > 254:
-        raise ValueError('Email is too long')
+def generate_challenge_id() -> str:
+    """Generate unique challenge ID."""
+    return 'challenge-' + str(uuid.uuid4())
 
 
-def _parse_authorization_header(event: Dict[str, Any]) -> Optional[str]:
-    """
-    Extract JWT token from Authorization header.
-
-    TODO-COGNITO: This stub function will be expanded to parse and validate
-    JWT tokens when Cognito integration is implemented. Currently accepts
-    Authorization header but does not validate.
-
-    Args:
-        event: API Gateway event containing headers
-
-    Returns:
-        Authorization header value or None if not present
-    """
-    headers = event.get('headers', {})
-    auth_header = headers.get('Authorization') or headers.get('authorization')
-    if auth_header:
-        logger.info(
-            'Authorization header present (validation deferred to Cognito integration)'
-        )
-    return auth_header
+def get_cognito_user_pool_id() -> str:
+    """Get Cognito user pool ID for the current stage."""
+    return settings.cognito_user_pool_id
 
 
-def _validate_jwt_token(token: str) -> Dict[str, Any]:
-    """
-    Validate JWT token and extract claims.
-
-    TODO-COGNITO: Implement JWT token validation using Cognito public keys.
-    This should:
-    1. Verify token signature against Cognito public keys
-    2. Check token expiration
-    3. Extract claims containing companyID and userID
-    4. Return claims dictionary
-
-    Current implementation: stub returning empty dict (no validation)
-
-    Args:
-        token: JWT token from Authorization header
-
-    Returns:
-        Claims dictionary containing companyID, userID, and other info
-
-    Raises:
-        ValueError: If token is invalid or expired
-    """
-    # TODO-COGNITO: Implement actual JWT validation here
-    logger.warning(
-        'JWT token validation not yet implemented (Cognito integration pending)'
-    )
-    return {}
+def get_cognito_app_client_id() -> str:
+    """Get Cognito app client ID for the current stage."""
+    if settings.stage == 'prod':
+        return settings.cognito_app_client_id_prod
+    return settings.cognito_app_client_id_dev
 
 
-def find_user_by_email(
-    company_id: str, email: str, companies_db: DatabaseHandler
-) -> Optional[Dict[str, Any]]:
-    """
-    Search for user by email in company's users array.
+def get_cognito_app_client_secret() -> Optional[str]:
+    """Get Cognito app client secret for the current stage, if configured."""
+    if settings.stage == 'prod':
+        return settings.cognito_app_client_secret_prod or None
+    return settings.cognito_app_client_secret_dev or None
 
-    Searches the hardcoded/single company's nested users list for matching email.
 
-    TODO-PERFORMANCE: For multi-company support, this logic should be replaced with:
-    - Option B: Table scan with FilterExpression checking all companies
-    - Option A: Dedicated users GSI table for O(1) email lookup
-
-    Args:
-        company_id: Company ID to search in
-        email: Email to match
-        companies_db: DatabaseHandler for companies table
-
-    Returns:
-        Dictionary with {companyID, userID, user_name, status, permission} if found, None otherwise
-    """
-    try:
-        logger.info(f'Searching for user with email: {email} in company: {company_id}')
-
-        # Fetch the company record
-        company_response = companies_db._deserialize_item(
-            companies_db.get_item(key={'companyID': company_id})
-        )
-
-        if not company_response:
-            logger.warning(f'Company not found: {company_id}')
-            return None
-
-        # Extract users list from company record
-        users = company_response.get('users', [])
-        if not isinstance(users, list):
-            logger.error(
-                f'Invalid users structure in company {company_id} - users: {users}'
-            )
-            return None
-
-        # Search for user with matching email
-        for users_list in users:
-            for user in users_list:
-                if (
-                    isinstance(user, dict)
-                    and user.get('user_email', '').lower() == email.lower()
-                ):
-                    logger.info(f'User found with email: {email}')
-                    return {**user, 'companyID': company_id}
-
-        logger.warning(f'User not found with email: {email} in company: {company_id}')
+def build_secret_hash(
+    username: str, client_id: str, client_secret: Optional[str]
+) -> Optional[str]:
+    """Build Cognito secret hash when app client secret is configured."""
+    if not client_secret:
         return None
+    message = f'{username}{client_id}'.encode('utf-8')
+    digest = hmac.new(client_secret.encode('utf-8'), message, hashlib.sha256).digest()
+    return base64.b64encode(digest).decode('utf-8')
 
-    except Exception as e:
-        logger.error(f'Error searching for user: {str(e)}', exc_info=True)
+
+def build_auth_parameters(username: str, client_id: str) -> Dict[str, str]:
+    """Build Cognito auth parameters with optional secret hash."""
+    params = {'USERNAME': username}
+    secret = get_cognito_app_client_secret()
+    secret_hash = build_secret_hash(username, client_id, secret)
+    if secret_hash:
+        params['SECRET_HASH'] = secret_hash
+    return params
+
+
+def mask_email(email: str) -> str:
+    """
+    Mask email for display (e.g., u***@company.com).
+
+    Args:
+        email: Email to mask
+
+    Returns:
+        Masked email address
+    """
+    parts = email.split('@')
+    if len(parts[0]) <= 2:
+        masked = parts[0]
+    else:
+        masked = parts[0][0] + '*' * (len(parts[0]) - 2) + parts[0][-1]
+    return f'{masked}@{parts[1]}'
+
+
+def send_code_email(email: str, code: str) -> None:
+    """
+    Send authentication code via SES.
+
+    Args:
+        email: Recipient email address
+        code: 6-digit authentication code
+
+    Raises:
+        ClientError: If SES send fails
+    """
+    subject = 'Seu código de autenticação Lead Control'
+    html_body = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+        <head>
+            <meta charset="utf-8" />
+            <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+            <title>Codigo de Acesso - Lead Control</title>
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f3f4f6; color: #1f2937; font-family: Arial, Helvetica, sans-serif;">
+            <div style="padding: 24px 16px;">
+                <div style="max-width: 480px; margin: 0 auto;">
+                    <div style="background-color: #ffffff; border: 1px solid #f1f5f9; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);">
+                        <div style="padding: 32px 32px 0 32px; text-align: center;">
+                            <div style="margin-bottom: 28px;">
+                                <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #1f2937;">Lead Control</span>
+                            </div>
+                        </div>
+                        <div style="padding: 0 32px 32px 32px; text-align: center;">
+                            <h1 style="font-size: 22px; font-weight: 700; color: #111827; margin: 0 0 12px 0;">Seu código de acesso chegou</h1>
+                            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">
+                                Utilize o código abaixo para validar sua identidade e acessar o sistema da Lead Control.
+                            </p>
+                            <div style="background-color: #38b2ac; border-radius: 12px; padding: 18px 12px; margin: 0 0 24px 0;">
+                                <span style="display: inline-block; font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; letter-spacing: 0.4em; color: #ffffff; padding-left: 0.2em;">{code}</span>
+                            </div>
+                            <p style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">
+                                Este código é válido por <span style="color: #2c7a7b;">{settings.auth_code_validity_minutes} minutos</span>.
+                            </p>
+                            <div style="height: 1px; background-color: #f1f5f9; width: 100%; margin: 12px 0 16px 0;"></div>
+                            <p style="font-size: 12px; color: #6b7280; line-height: 1.6; font-style: italic; margin: 0;">
+                                Se você não solicitou este acesso, por favor ignore este email. Nenhuma ação adicional é necessária.
+                            </p>
+                        </div>
+                        <div style="height: 6px; background: linear-gradient(90deg, #38b2ac 0%, #2c7a7b 100%);"></div>
+                    </div>
+                    <div style="margin-top: 24px; text-align: center; padding: 0 8px;">
+                        <p style="font-size: 12px; color: #6b7280; font-weight: 600; margin: 0 0 6px 0;">
+                            Lead Control Auditiva &amp; Clinical Management
+                        </p>
+                        <p style="font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.2em; margin: 0;">
+                            &copy; {datetime.now().year} Lead Control. Todos os direitos reservados.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+
+    text_body = f"""
+Lead Control - Código de Acesso
+
+Seu código: {code}
+
+Este código é válido por {settings.auth_code_validity_minutes} minutos.
+
+Se você não solicitou este acesso, ignore este email.
+
+© {datetime.now().year} Lead Control. Todos os direitos reservados.
+    """
+
+    try:
+        ses_client.send_email(
+            Source=settings.ses_from_email,
+            Destination={'ToAddresses': [email]},
+            Message={
+                'Subject': {'Data': subject, 'Charset': 'UTF-8'},
+                'Body': {
+                    'Text': {'Data': text_body, 'Charset': 'UTF-8'},
+                    'Html': {'Data': html_body, 'Charset': 'UTF-8'},
+                },
+            },
+        )
+        logger.info(f'Email sent successfully to {email}')
+    except ClientError as e:
+        logger.error(f'Failed to send email to {email}: {str(e)}')
         raise
 
 
-def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def ensure_cognito_user(email: str, user_name: str) -> str:
     """
-    Lambda handler for user authentication via email lookup.
-
-    Process:
-    1. Handle OPTIONS preflight request
-    2. Extract and validate email from request body
-    3. Query company's users for matching email
-    4. Validate user status is 'ativo'
-    5. Return success with companyID and userID
+    Ensure a Cognito user exists and return the Cognito username.
 
     Args:
-        event: API Gateway HTTP event with body containing email
-        context: Lambda context object
+        email: User email address
+        user_name: User display name
 
     Returns:
-        API Gateway response with 200 status and user details on success
-        API Gateway response with 401 status if user not found or inactive
-        API Gateway response with 400 status on validation errors
-        API Gateway response with 500 status on unexpected errors
+        Cognito username
+    """
+    user_pool_id = get_cognito_user_pool_id()
+    response_data = cognito_client.list_users(
+        UserPoolId=user_pool_id,
+        Filter=f'email = "{email}"',
+        Limit=1,
+    )
 
-    Expected Request Body:
-        {
-            "email": "user@example.com"
-        }
+    if response_data.get('Users'):
+        user = response_data['Users'][0]
+        username = user['Username']
+        if not user.get('Enabled', True):
+            cognito_client.admin_enable_user(UserPoolId=user_pool_id, Username=username)
 
-    Response Body (200 OK):
-        {
-            "success": true,
-            "companyID": "COMP001",
-            "userID": "user-uuid-here"
+        attributes = {
+            attr['Name']: attr['Value'] for attr in user.get('Attributes', [])
         }
+        if attributes.get('email_verified') != 'true':
+            cognito_client.admin_update_user_attributes(
+                UserPoolId=user_pool_id,
+                Username=username,
+                UserAttributes=[{'Name': 'email_verified', 'Value': 'true'}],
+            )
 
-    Response Body (401 Unauthorized):
-        {
-            "success": false,
-            "message": "User not found" | "User account is inactive"
-        }
+        return username
+
+    user_attributes = [
+        {'Name': 'email', 'Value': email},
+        {'Name': 'email_verified', 'Value': 'true'},
+    ]
+    if user_name:
+        user_attributes.append({'Name': 'name', 'Value': user_name})
+
+    create_response = cognito_client.admin_create_user(
+        UserPoolId=user_pool_id,
+        Username=email,
+        UserAttributes=user_attributes,
+        MessageAction='SUPPRESS',
+    )
+    username = create_response['User']['Username']
+
+    try:
+        cognito_client.admin_confirm_sign_up(
+            UserPoolId=user_pool_id,
+            Username=username,
+        )
+    except ClientError as e:
+        if e.response.get('Error', {}).get('Code') != 'NotAuthorizedException':
+            logger.warning(f'Failed to confirm Cognito user {email}: {str(e)}')
+
+    return username
+
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetch user information from database by email.
+
+    Queries the dedicated users table using email GSI for efficient O(1) lookups.
+    This eliminates the need to scan the companies table and provides better scalability.
+
+    Args:
+        email: User email address
+
+    Returns:
+        User dictionary with userId, companyId, email if found, None otherwise
+
+    DynamoDB Table Structure:
+    Table: <stage>-auris-core-companies-users
+    - PrimaryKey: userID (String)
+    - GSI: userEmailIndex
+      - PartitionKey: user_email (String)
+      - SortKey: userID (String)
+
+    Item Schema:
+    {
+        "userID": "usr_550e8400e29b41d4a716446655440000",
+        "user_email": "user@company.com",
+        "user_name": "João da Silva",
+        "companyID": "896504cc-bd92-448b-bc92-74bfcd2c73c2",
+        "status": "ativo",
+        "permission": "manager",
+        "job": "Gerente",
+        "createdAt": 1677600000,
+        "updatedAt": 1677600000
+    }
     """
     try:
-        logger.info('Processing login request')
+        users_db = DatabaseHandler(table_name=settings.users_table_name)
 
-        # Handle OPTIONS preflight request
-        if event.get('httpMethod') == 'OPTIONS':
-            logger.info('Handling OPTIONS preflight request')
-            return response(status_code=200, message='', headers=CORS_HEADERS)
-
-        # Extract and validate payload
-        payload = extract_payload(event)
-        email = payload.get('email', '').strip()
-
-        validate_email(email)
-        logger.info(f'Email validated: {email}')
-
-        # TODO-COGNITO: When Cognito is integrated, parse Authorization header
-        # and validate JWT token instead of email lookup
-        auth_header = _parse_authorization_header(event)
-        if auth_header:
-            logger.info('Authorization header detected (Cognito integration pending)')
-            # TODO-COGNITO: Uncomment and implement when ready:
-            # claims = _validate_jwt_token(auth_header)
-            # company_id = claims.get('companyID')
-            # user_id = claims.get('userID')
-
-        # Initialize database handler
-        companies_db = DatabaseHandler(table_name=settings.companies_table_name)
-
-        # Search for user by email in hardcoded company
-        user_data = find_user_by_email(HARDCODED_COMPANY_ID, email, companies_db)
-
-        if not user_data:
-            logger.warning(f'User not found: {email}')
-            return response(
-                status_code=404,
-                message={'success': False, 'message': 'User not found'},
-                headers=CORS_HEADERS,
-            )
-
-        # Validate user status is 'ativo'
-        user_status = user_data.get('status', '').lower()
-        if user_status != 'ativo':
-            logger.warning(
-                f'Login attempt with inactive user: {email} (status: {user_status})'
-            )
-            return response(
-                status_code=401,
-                message={
-                    'success': False,
-                    'message': 'User account is inactive',
-                },
-                headers=CORS_HEADERS,
-            )
-
-        logger.info(
-            f'User authenticated successfully: {email} (companyID: {user_data["companyID"]}, userID: {user_data["userID"]})'
+        # Query using GSI on user_email for efficient O(1) lookup
+        # Access the boto3 client from DatabaseHandler to perform GSI query
+        response = users_db.client.query(
+            TableName=settings.users_table_name,
+            IndexName='userEmailIndex',
+            KeyConditionExpression='user_email = :email',
+            ExpressionAttributeValues={
+                ':email': {'S': email.lower()},
+            },
         )
 
+        # Deserialize items from DynamoDB format
+        items_raw = response.get('Items', [])
+        items = (
+            [users_db._deserialize_item(item) for item in items_raw]
+            if items_raw
+            else []
+        )
+
+        if not items:
+            logger.info(f'User with email {email} not found')
+            return None
+
+        # Get first matching user (user_email should be unique)
+        user_item = items[0]
+
+        # Verify user is active
+        if user_item.get('status', '').lower() != 'ativo':
+            logger.warning(f'User {email} is not active')
+            return None
+
+        return {
+            'userId': user_item.get('userID', ''),
+            'companyId': user_item.get('companyID', ''),
+            'email': email,
+            'userName': user_item.get('user_name', ''),
+        }
+
+    except Exception as e:
+        logger.error(f'Error fetching user by email: {str(e)}', exc_info=True)
+        return None
+
+
+def handle_send_code(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Stage 1: Send authentication code via email.
+
+    Expected payload:
+    {
+        "stage": "sendCode",
+        "email": "user@company.com",
+        "rememberMe": false
+    }
+
+    Returns:
+        Success response with challengeId and delivery details
+    """
+    payload = extract_payload(event)
+    email = payload.get('email', '').strip().lower()
+    remember_me = payload.get('rememberMe', False)
+
+    try:
+        # Check if user exists in database
+        user_data = get_user_by_email(email)
+        if not user_data:
+            # For security, don't reveal if user exists or not
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'USER_NOT_FOUND',
+                        'message': 'User not found or inactive',
+                    },
+                },
+                status_code=404,
+                headers=CORS_HEADERS,
+            )
+
+        challenge_id = generate_challenge_id()
+
+        # Ensure Cognito user exists and initiate custom auth
+        cognito_username = ensure_cognito_user(email, user_data.get('userName', ''))
+        client_id = get_cognito_app_client_id()
+        auth_params = build_auth_parameters(cognito_username, client_id)
+
+        auth_response = cognito_client.initiate_auth(
+            ClientId=client_id,
+            AuthFlow='CUSTOM_AUTH',
+            AuthParameters=auth_params,
+            ClientMetadata={
+                'challengeId': challenge_id,
+                'email': email,
+            },
+        )
+
+        if auth_response.get('ChallengeName') != 'CUSTOM_CHALLENGE':
+            logger.error(
+                f"Unexpected challenge name: {auth_response.get('ChallengeName')}"
+            )
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'AUTH_CHALLENGE_ERROR',
+                        'message': 'Unexpected authentication challenge',
+                    },
+                },
+                status_code=500,
+                headers=CORS_HEADERS,
+            )
+
+        session_token = auth_response.get('Session')
+        if not session_token:
+            logger.error('Cognito did not return a session token')
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'AUTH_SESSION_ERROR',
+                        'message': 'Failed to initiate authentication session',
+                    },
+                },
+                status_code=500,
+                headers=CORS_HEADERS,
+            )
+
+        # Generate 6-digit code
+        code = ''.join(random.choices(string.digits, k=settings.auth_code_length))
+        created_at = datetime.utcnow()
+        expires_at = created_at + timedelta(minutes=settings.auth_code_validity_minutes)
+
+        # Store code in DynamoDB with TTL
+        auth_codes_db.insert_item(
+            item={
+                'challengeID': challenge_id,
+                'email': email,
+                'code': code,
+                'createdAt': int(created_at.timestamp()),
+                'expiresAt': int(expires_at.timestamp()),
+                'attempts': 0,
+                'rememberMe': remember_me,
+                'cognitoSession': session_token,
+                'cognitoUsername': cognito_username,
+                'ttl': int(expires_at.timestamp()),
+            },
+            primary_key='challengeID',
+        )
+
+        # Send code via SES
+        send_code_email(email, code)
+
+        logger.info(f'Code sent to {email} with challengeId {challenge_id}')
+
         return response(
-            status_code=200,
-            message={
-                'success': True,
-                'companyID': user_data['companyID'],
-                'userID': user_data['userID'],
+            {
+                'status': 'CHALLENGE_SENT',
+                'data': {
+                    'challengeId': challenge_id,
+                    'delivery': {
+                        'type': 'EMAIL',
+                        'destination': mask_email(email),
+                    },
+                    'challenge': {
+                        'type': 'EMAIL_OTP',
+                        'digits': settings.auth_code_length,
+                        'expiresInSeconds': settings.auth_code_validity_minutes * 60,
+                    },
+                },
             },
             headers=CORS_HEADERS,
         )
 
-    except ValueError as e:
-        logger.warning(f'Validation error: {str(e)}')
+    except ClientError as e:
+        logger.error(f'AWS error in send_code: {str(e)}')
         return response(
+            {
+                'status': 'ERROR',
+                'error': {'code': 'AWS_ERROR', 'message': 'Failed to process request'},
+            },
+            status_code=500,
+            headers=CORS_HEADERS,
+        )
+    except Exception as e:
+        logger.error(f'Unexpected error in send_code: {str(e)}', exc_info=True)
+        return response(
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'SERVER_ERROR',
+                    'message': 'An unexpected error occurred',
+                },
+            },
+            status_code=500,
+            headers=CORS_HEADERS,
+        )
+
+
+def handle_verify_code(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Stage 2: Verify the code and return tokens.
+
+    Expected payload:
+    {
+        "stage": "verifyCode",
+        "email": "user@company.com",
+        "shortCode": "123456",
+        "challengeId": "uuid-session-id",
+        "rememberMe": true
+    }
+
+    Returns:
+        Success response with user data and Cognito tokens
+    """
+    payload = extract_payload(event)
+    email = payload.get('email', '').strip().lower()
+    short_code = (payload.get('shortCode') or payload.get('code') or '').strip()
+    challenge_id = payload.get('challengeId') or payload.get('challengeID', '')
+    remember_me = payload.get('rememberMe', False)
+
+    # Validate inputs
+    if not email or not short_code or not challenge_id:
+        return response(
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'MISSING_PARAMS',
+                    'message': 'Missing required parameters',
+                },
+            },
             status_code=400,
-            message={'success': False, 'message': str(e)},
+            headers=CORS_HEADERS,
+        )
+
+    if not short_code.isdigit() or len(short_code) != settings.auth_code_length:
+        return response(
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'INVALID_CODE_FORMAT',
+                    'message': f'Code must be {settings.auth_code_length} digits',
+                },
+            },
+            status_code=400,
+            headers=CORS_HEADERS,
+        )
+
+    try:
+        # Retrieve stored code from DynamoDB
+        stored_data = auth_codes_db._deserialize_item(
+            auth_codes_db.get_item(key={'challengeID': challenge_id})
+        )
+
+        if not stored_data:
+            logger.warning(f'Challenge ID {challenge_id} not found')
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'INVALID_CHALLENGE',
+                        'message': 'Challenge not found',
+                    },
+                },
+                status_code=400,
+                headers=CORS_HEADERS,
+            )
+
+        # Verify email matches
+        if stored_data['email'] != email:
+            logger.warning(
+                f"Email mismatch for challenge ID {challenge_id}: expected {stored_data['email']}, got {email}"
+            )
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'EMAIL_MISMATCH',
+                        'message': 'Email does not match challenge',
+                    },
+                },
+                status_code=400,
+                headers=CORS_HEADERS,
+            )
+
+        if 'rememberMe' not in payload:
+            remember_me = stored_data.get('rememberMe', False)
+
+        # Check if code has expired
+        current_time = int(datetime.utcnow().timestamp())
+        if current_time > stored_data['expiresAt']:
+            logger.warning(f'Code expired for challenge ID {challenge_id}')
+            auth_codes_db.delete_item(
+                key={'challengeID': challenge_id},
+                primary_key='challengeID',
+            )
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {'code': 'CODE_EXPIRED', 'message': 'Code has expired'},
+                },
+                status_code=401,
+                headers=CORS_HEADERS,
+            )
+
+        # Check attempt limit
+        if stored_data['attempts'] >= settings.auth_code_max_attempts:
+            logger.warning(f'Max attempts exceeded for challenge ID {challenge_id}')
+            auth_codes_db.delete_item(
+                key={'challengeID': challenge_id},
+                primary_key='challengeID',
+            )
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'MAX_ATTEMPTS_EXCEEDED',
+                        'message': 'Too many attempts',
+                    },
+                },
+                status_code=401,
+                headers=CORS_HEADERS,
+            )
+
+        # Verify code
+        if stored_data['code'] != short_code:
+            logger.warning(
+                f"Invalid code for challenge ID {challenge_id}: expected {stored_data['code']}, got {short_code}"
+            )
+            # Increment attempts
+            auth_codes_db.update_item(
+                key={'challengeID': challenge_id},
+                updates={'attempts': stored_data['attempts'] + 1},
+                primary_key='challengeID',
+            )
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {'code': 'INVALID_CODE', 'message': 'Code is incorrect'},
+                },
+                status_code=401,
+                headers=CORS_HEADERS,
+            )
+
+        # Code is valid - exchange for Cognito tokens
+        cognito_session = stored_data.get('cognitoSession')
+        cognito_username = stored_data.get('cognitoUsername') or email
+        if not cognito_session:
+            logger.error(f'Missing Cognito session for challenge ID {challenge_id}')
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'AUTH_SESSION_MISSING',
+                        'message': 'Authentication session not found',
+                    },
+                },
+                status_code=401,
+                headers=CORS_HEADERS,
+            )
+
+        client_id = get_cognito_app_client_id()
+        challenge_responses = {
+            'USERNAME': cognito_username,
+            'ANSWER': short_code,
+        }
+        secret = get_cognito_app_client_secret()
+        secret_hash = build_secret_hash(cognito_username, client_id, secret)
+        if secret_hash:
+            challenge_responses['SECRET_HASH'] = secret_hash
+
+        auth_response = cognito_client.respond_to_auth_challenge(
+            ClientId=client_id,
+            ChallengeName='CUSTOM_CHALLENGE',
+            Session=cognito_session,
+            ChallengeResponses=challenge_responses,
+            ClientMetadata={
+                'challengeId': challenge_id,
+                'email': email,
+            },
+        )
+
+        auth_result = auth_response.get('AuthenticationResult')
+        if not auth_result:
+            logger.error(f'Cognito did not return tokens for {email}')
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'TOKEN_ISSUE_FAILED',
+                        'message': 'Failed to issue tokens',
+                    },
+                },
+                status_code=500,
+                headers=CORS_HEADERS,
+            )
+
+        # Code is valid - delete the challenge
+        logger.info(
+            f'Code verified successfully for challenge ID {challenge_id} and email {email}'
+        )
+        auth_codes_db.delete_item(
+            key={'challengeID': challenge_id},
+            primary_key='challengeID',
+        )
+
+        # Get user data
+        user_data = get_user_by_email(email)
+        if not user_data:
+            logger.warning(f'User not found for email {email}')
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {'code': 'USER_NOT_FOUND', 'message': 'User not found'},
+                },
+                status_code=404,
+                headers=CORS_HEADERS,
+            )
+
+        access_token = auth_result.get('AccessToken')
+        id_token = auth_result.get('IdToken')
+        refresh_token = auth_result.get('RefreshToken')
+        expires_in = auth_result.get('ExpiresIn') or 3600
+        expires_at = (
+            datetime.utcnow() + timedelta(seconds=expires_in)
+        ).isoformat() + 'Z'
+
+        logger.info(f'User {email} authenticated successfully')
+
+        response_data = {
+            'user': {
+                'userId': user_data['userId'],
+                'companyId': user_data['companyId'],
+                'email': email,
+            },
+            'tokens': {
+                'accessToken': {
+                    'value': access_token,
+                    'expiresAt': expires_at,
+                },
+                'idToken': {'value': id_token},
+            },
+        }
+
+        if remember_me and refresh_token:
+            response_data['tokens']['refreshToken'] = {'value': refresh_token}
+
+        return response(
+            {'status': 'AUTHENTICATED', 'data': response_data},
+            headers=CORS_HEADERS,
+        )
+
+    except ClientError as e:
+        logger.error(f'AWS error in verify_code: {str(e)}')
+        return response(
+            {
+                'status': 'ERROR',
+                'error': {'code': 'AWS_ERROR', 'message': 'Failed to process request'},
+            },
+            status_code=500,
+            headers=CORS_HEADERS,
+        )
+    except Exception as e:
+        logger.error(f'Unexpected error in verify_code: {str(e)}', exc_info=True)
+        return response(
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'SERVER_ERROR',
+                    'message': 'An unexpected error occurred',
+                },
+            },
+            status_code=500,
+            headers=CORS_HEADERS,
+        )
+
+
+def handle_refresh_token(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Stage 3: Refresh access token.
+
+    Expected payload:
+    {
+        "stage": "refresh",
+        "refreshToken": "cognito_refresh_token",
+        "email": "user@company.com"
+    }
+
+    Returns:
+        Success response with new access token
+    """
+    payload = extract_payload(event)
+    refresh_token = payload.get('refreshToken', '')
+    email = payload.get('email', '').strip().lower()
+
+    # Validate inputs
+    if not refresh_token:
+        logger.warning('Missing refresh token in refresh request')
+        return response(
+            {
+                'status': 'ERROR',
+                'error': {'code': 'MISSING_PARAMS', 'message': 'Missing refresh token'},
+            },
+            status_code=400,
+            headers=CORS_HEADERS,
+        )
+
+    try:
+        client_id = get_cognito_app_client_id()
+        secret = get_cognito_app_client_secret()
+        auth_parameters = {'REFRESH_TOKEN': refresh_token}
+
+        if secret:
+            if not email:
+                return response(
+                    {
+                        'status': 'ERROR',
+                        'error': {
+                            'code': 'MISSING_EMAIL',
+                            'message': 'Email is required to refresh token',
+                        },
+                    },
+                    status_code=400,
+                    headers=CORS_HEADERS,
+                )
+            auth_parameters['USERNAME'] = email
+            auth_parameters['SECRET_HASH'] = build_secret_hash(email, client_id, secret)
+
+        auth_response = cognito_client.initiate_auth(
+            ClientId=client_id,
+            AuthFlow='REFRESH_TOKEN_AUTH',
+            AuthParameters=auth_parameters,
+        )
+
+        auth_result = auth_response.get('AuthenticationResult')
+        if not auth_result:
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'TOKEN_REFRESH_FAILED',
+                        'message': 'Failed to refresh token',
+                    },
+                },
+                status_code=401,
+                headers=CORS_HEADERS,
+            )
+
+        new_access_token = auth_result.get('AccessToken')
+        new_id_token = auth_result.get('IdToken')
+        expires_in = auth_result.get('ExpiresIn') or 3600
+        expires_at = (
+            datetime.utcnow() + timedelta(seconds=expires_in)
+        ).isoformat() + 'Z'
+
+        logger.info(f"Token refreshed for user {email or 'unknown'}")
+
+        return response(
+            {
+                'status': 'TOKEN_REFRESHED',
+                'data': {
+                    'tokens': {
+                        'accessToken': {
+                            'value': new_access_token,
+                            'expiresAt': expires_at,
+                        },
+                        'idToken': {'value': new_id_token},
+                    }
+                },
+            },
             headers=CORS_HEADERS,
         )
 
     except Exception as e:
-        logger.error(f'Unexpected error during login: {str(e)}', exc_info=True)
+        logger.error(f'Error in refresh_token: {str(e)}', exc_info=True)
         return response(
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'TOKEN_REFRESH_FAILED',
+                    'message': 'Failed to refresh token',
+                },
+            },
+            status_code=401,
+            headers=CORS_HEADERS,
+        )
+
+
+def login(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """
+    Main Lambda handler for passwordless authentication.
+
+    Routes requests to appropriate handler based on stage parameter.
+    Supports three authentication stages:
+    - sendCode: Generate and send verification code
+    - verifyCode: Validate code and return tokens
+    - refresh: Refresh access token
+
+    Args:
+        event: API Gateway HTTP event
+        context: Lambda context object
+
+    Returns:
+        API Gateway response dictionary
+
+    Example Payloads:
+
+    **Stage 1: sendCode**
+    Request:
+    {
+        "stage": "sendCode",
+        "email": "user@company.com",
+            expires_in = auth_result.get('ExpiresIn') or 3600
+    }
+
+    Response (Success - 200):
+    {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json", ...},
+        "body": {
+            "status": "CHALLENGE_SENT",
+            "data": {
+                "challengeId": "challenge-550e8400-e29b-41d4-a716-446655440000",
+                "delivery": {
+                    "type": "EMAIL",
+                    "destination": "u***@company.com"
+                },
+                "challenge": {
+                    "type": "EMAIL_OTP",
+                    "digits": 6,
+                    "expiresInSeconds": 300
+                }
+            }
+        }
+    }
+
+    Response (Error - 404):
+    {
+        "statusCode": 404,
+        "headers": {"Content-Type": "application/json", ...},
+        "body": {
+            "status": "ERROR",
+            "error": {
+                "code": "USER_NOT_FOUND",
+                "message": "User not found or inactive"
+            }
+        }
+    }
+
+    ---
+
+    **Stage 2: verifyCode**
+    Request:
+    {
+        "stage": "verifyCode",
+        "email": "user@company.com",
+        "shortCode": "123456",
+        "challengeId": "challenge-550e8400-e29b-41d4-a716-446655440000",
+        "rememberMe": true
+    }
+
+    Response (Success - 200):
+    {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json", ...},
+        "body": {
+            "status": "AUTHENTICATED",
+            "data": {
+                "user": {
+                    "userId": "usr_550e8400e29b41d4a716446655440000",
+                    "companyId": "896504cc-bd92-448b-bc92-74bfcd2c73c2",
+                    "email": "user@company.com"
+                },
+                "tokens": {
+                    "accessToken": {
+                        "value": "eyJraWQiOiJ...",
+                        "expiresAt": "2026-02-11T08:30:45.123456Z"
+                    },
+                    "idToken": {
+                        "value": "eyJraWQiOiJ..."
+                    },
+                    "refreshToken": {
+                        "value": "eyJjdHkiOiJ..."
+                    }
+                }
+            }
+        }
+    }
+
+    Response (Error - 401):
+    {
+        "statusCode": 401,
+        "headers": {"Content-Type": "application/json", ...},
+        "body": {
+            "status": "ERROR",
+            "error": {
+                "code": "INVALID_CODE",
+                "message": "Code is incorrect"
+            }
+        }
+    }
+
+    ---
+
+    **Stage 3: refresh**
+    Request:
+    {
+        "stage": "refresh",
+        "refreshToken": "eyJjdHkiOiJKV1QiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwiYWxnIjoiUlNBLU9BRVAifQ...",
+        "email": "user@company.com"
+    }
+
+    Response (Success - 200):
+    {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json", ...},
+        "body": {
+            "status": "TOKEN_REFRESHED",
+            "data": {
+                "tokens": {
+                    "accessToken": {
+                        "value": "eyJraWQiOiJ...",
+                        "expiresAt": "2026-02-11T08:30:45.123456Z"
+                    },
+                    "idToken": {
+                        "value": "eyJraWQiOiJ..."
+                    }
+                }
+            }
+        }
+    }
+
+    Response (Error - 401):
+    {
+        "statusCode": 401,
+        "headers": {"Content-Type": "application/json", ...},
+        "body": {
+            "status": "ERROR",
+            "error": {
+                "code": "INVALID_TOKEN",
+                "message": "Refresh token is invalid or expired"
+            }
+        }
+    }
+    """
+    try:
+        logger.info('Processing authentication request')
+
+        # Handle OPTIONS preflight request
+        if event.get('httpMethod') == 'OPTIONS':
+            logger.info('Handling OPTIONS preflight request')
+            return {
+                'statusCode': 200,
+                'headers': CORS_HEADERS,
+                'body': json.dumps({'message': 'OK'}),
+            }
+
+        # Extract stage from payload
+        payload = extract_payload(event)
+        stage = payload.get('stage')
+
+        if stage == 'sendCode':
+            return handle_send_code(event)
+        elif stage == 'verifyCode':
+            return handle_verify_code(event)
+        elif stage == 'refresh':
+            return handle_refresh_token(event)
+        else:
+            return response(
+                {
+                    'status': 'ERROR',
+                    'error': {
+                        'code': 'INVALID_STAGE',
+                        'message': 'Invalid authentication stage',
+                    },
+                },
+                status_code=400,
+                headers=CORS_HEADERS,
+            )
+
+    except ValueError as e:
+        logger.warning(f'Validation error: {str(e)}')
+        return response(
+            {
+                'status': 'ERROR',
+                'error': {'code': 'VALIDATION_ERROR', 'message': str(e)},
+            },
+            status_code=400,
+            headers=CORS_HEADERS,
+        )
+
+    except Exception as e:
+        logger.error(f'Unexpected error: {str(e)}', exc_info=True)
+        return response(
+            {
+                'status': 'ERROR',
+                'error': {
+                    'code': 'SERVER_ERROR',
+                    'message': 'An unexpected error occurred',
+                },
+            },
             status_code=500,
-            message={'success': False, 'message': 'Internal server error'},
             headers=CORS_HEADERS,
         )

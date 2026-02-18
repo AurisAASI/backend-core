@@ -15,6 +15,7 @@
   "devDependencies": {
     "serverless": "^4.0.0",
     "serverless-add-api-key": "^4.2.1",
+    "serverless-dotenv-plugin": "^4.0.0",
     "serverless-offline": "^14.4.0"
   }
 }
