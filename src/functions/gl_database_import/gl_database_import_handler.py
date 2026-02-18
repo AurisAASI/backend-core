@@ -54,6 +54,9 @@ TIMEOUT_MINUTES = 3  # Mark as timeout after this duration
 # Required CSV columns (exact match)
 REQUIRED_COLUMNS = ['fullName', 'phone', 'source', 'entryDate']
 
+# Observation/Message constraints
+MAX_OBSERVATION_LENGTH = 1000  # Maximum characters for observation field
+
 # CORS Headers
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -609,6 +612,10 @@ def _parse_and_validate_file(
     # Add validation_error_message column to track errors
     df['validation_error_message'] = ''
 
+    # Ensure optional 'observation' column exists, add if missing
+    if 'observation' not in df.columns:
+        df['observation'] = ''
+
     # Validate and normalize each row
     validation_errors = []
 
@@ -827,6 +834,18 @@ def _process_leads_async(
             # Add optional fields if present
             if 'email' in row and not pd.isna(row['email']):
                 lead_data['email'] = str(row['email'])
+
+            if 'observation' in row and not pd.isna(row['observation']):
+                obs_value = str(row['observation']).strip()
+                if obs_value:
+                    # Truncate observation to maximum allowed length with warning
+                    if len(obs_value) > MAX_OBSERVATION_LENGTH:
+                        logger.warning(
+                            f'Observation truncated from {len(obs_value)} to '
+                            f'{MAX_OBSERVATION_LENGTH} characters for row {idx + 2}'
+                        )
+                        obs_value = obs_value[:MAX_OBSERVATION_LENGTH]
+                    lead_data['observation'] = obs_value
 
             if 'entryDate' in row and not pd.isna(row['entryDate']):
                 try:

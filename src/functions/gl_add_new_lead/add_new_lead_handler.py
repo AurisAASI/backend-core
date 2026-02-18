@@ -39,6 +39,9 @@ CORS_HEADERS = {
     'Access-Control-Allow-Methods': 'OPTIONS,POST,GET,PUT,DELETE',
 }
 
+# Message constraints
+MAX_OBSERVATION_LENGTH = 5000  # Maximum characters for observation field
+
 # Load schema templates
 LEAD_SCHEMA_PATH = (
     Path(__file__).parent.parent.parent
@@ -276,7 +279,20 @@ def add_new_lead(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if payload.get('statusLead')
             else 'Aguardando contato'
         )
-        initial_message = f'Lead criado via {source}. Status inicial: {status}.'
+
+        # Use observation if provided from import, otherwise use default message
+        if payload.get('observation'):
+            observation = str(payload.get('observation')).strip()
+            # Truncate observation to maximum allowed length with warning
+            if len(observation) > MAX_OBSERVATION_LENGTH:
+                logger.warning(
+                    f'Observation truncated from {len(observation)} to '
+                    f'{MAX_OBSERVATION_LENGTH} characters for lead {lead_id}'
+                )
+                observation = observation[:MAX_OBSERVATION_LENGTH]
+            initial_message = observation
+        else:
+            initial_message = f'Lead criado via {source}. Status inicial: {status}.'
 
         comm_id = create_initial_communication(
             company_id=company_id,
