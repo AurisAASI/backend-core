@@ -935,8 +935,8 @@ custom:
     override: true
   # Cognito User Pool ARN for the current stage
   cognitoUserPoolArn:
-    dev: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:userpool/${env:COGNITO_USER_POOL_ID_DEV, 'us-east-1_4dcGw1kVK'}
-    prod: arn:aws:cognito-idp:${self:provider.region}:${env:AWS_ACCOUNT_ID, '819774487459'}:userpool/${env:COGNITO_USER_POOL_ID_PROD, 'us-east-1_A98Kq5gM6'}
+    dev: aarn:aws:cognito-idp:us-east-1:819774487459:userpool/us-east-1_4dcGw1kVK
+    prod: arn:aws:cognito-idp:us-east-1:819774487459:userpool/us-east-1_A98Kq5gM6
   apiKey:
     name: ${self:service}-${self:provider.stage}-api-key
     description: API key for ${self:service} service in ${self:provider.stage} stage
