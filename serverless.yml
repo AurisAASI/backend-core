@@ -60,6 +60,7 @@ provider:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
+            - logs:DeleteLogGroup
           Resource: "arn:aws:logs:*:*:*"
 
 package:
@@ -449,13 +450,13 @@ functions:
         Action:
           - s3:HeadBucket
         Resource:
-          - arn:aws:s3:::auris-database-imports
+          - arn:aws:s3:::auris-database-imports-${self:provider.stage}
       - Effect: Allow
         Action:
           - s3:PutObject
           - s3:PutObjectAcl
         Resource:
-          - arn:aws:s3:::auris-database-imports/*
+          - arn:aws:s3:::auris-database-imports-${self:provider.stage}/*
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
       - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gl_database_import:1
@@ -467,19 +468,10 @@ functions:
     memorySize: 1024
     events:
       - s3:
-          bucket: auris-database-imports
+          bucket: auris-database-imports-${self:provider.stage}
           event: s3:ObjectCreated:*
           rules:
-            - prefix: uploads/
-            - suffix: .csv
-          existing: true
-      - s3:
-          bucket: auris-database-imports
-          event: s3:ObjectCreated:*
-          rules:
-            - prefix: uploads/
-            - suffix: .xlsx
-          existing: true
+            - prefix: uploads/${self:provider.stage}/
     package:
       patterns:
         - src/functions/gl_database_import/**
@@ -517,12 +509,12 @@ functions:
           - s3:CopyObject
           - s3:HeadObject
         Resource:
-          - arn:aws:s3:::auris-database-imports/*
+          - arn:aws:s3:::auris-database-imports-${self:provider.stage}/*
       - Effect: Allow
         Action:
           - s3:ListBucket
         Resource:
-          - arn:aws:s3:::auris-database-imports
+          - arn:aws:s3:::auris-database-imports-${self:provider.stage}
       - Effect: Allow
         Action:
           - sqs:SendMessage
