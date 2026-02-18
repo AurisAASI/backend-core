@@ -971,7 +971,9 @@ def _generate_results_file(
 
     # Upload to S3
     date_prefix = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    results_key = f'results/{settings.stage}/{company_id}/{date_prefix}/{import_id}-results.csv'
+    results_key = (
+        f'results/{settings.stage}/{company_id}/{date_prefix}/{import_id}-results.csv'
+    )
 
     s3_client.upload_file(
         results_file_path,
