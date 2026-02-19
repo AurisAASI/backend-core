@@ -66,35 +66,52 @@ provider:
 package:
   individually: true
   patterns:
-    - '!node_modules/**'
-    - '!.venv/**'
-    - '!venv/**'
-    - '!.gitignore'
-    - '!.git/**'
-    - '!__pycache__/**'
+    # Exclude Python bytecode and cache
+    - '!**/*.pyc'
+    - '!**/*.pyo'
     - '!**/__pycache__/**'
+    - '!**/.pytest_cache/**'
+    # Exclude Python package metadata (critical for size reduction)
+    - '!**/*.dist-info/**'
+    - '!**/*.egg-info/**'
+    # Exclude site-packages and installed dependencies
+    - '!**/.venv/**'
+    - '!**/venv/**'
+    - '!**/env/**'
+    - '!**/site-packages/**'
+    # Exclude build artifacts
+    - '!node_modules/**'
+    - '!lambda_layers/**'
+    - '!.serverless/**'
+    - '!build/**'
+    - '!dist/**'
+    # Exclude development and test files
     - '!tests/**'
     - '!.pytest_cache/**'
-    - '!.vscode/**'
     - '!htmlcov/**'
+    - '!.coverage*'
+    - '!coverage.xml'
+    # Exclude version control and config
+    - '!.git/**'
     - '!.github/**'
+    - '!.gitignore'
+    - '!.vscode/**'
     - '!.flake8'
     - '!.env'
     - '!.env*'
-    - '!.coverage*'
-    - '!README.md'
+    # Exclude documentation and package files
     - '!*.md'
+    - '!README.md'
     - '!package.json'
     - '!package-lock.json'
     - '!serverless.yml'
     - '!pyproject.toml'
     - '!requirements*.txt'
-    - '!coverage.xml'
     - '!code_quality.sh'
     - '!manage.py'
+    - '!build_lambda_layers.sh'
     - '!.requirements.zip'
-    - '!*.pyc'
-    - '!**/*.pyc'
+    - '!.npmrc'
 
 functions:
   # Cognito Custom Auth Triggers
@@ -242,7 +259,7 @@ functions:
         Resource: !GetAtt WebsiteScraperTaskQueue.Arn
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:gmaps_scrapper:2
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:requests:2
 
   website_scrapper:
     handler: src/functions/data_scrapper/website_handler.website_scrapper
@@ -284,7 +301,7 @@ functions:
         Resource: !GetAtt CompanyFederalScraperTaskQueue.Arn
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:website_scrapper:3
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:auris_tools:2
 
   company_federal_scrapper:
     handler: src/functions/data_scrapper/company_federal_handler.company_federal_scrapper
