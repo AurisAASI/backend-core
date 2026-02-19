@@ -3,6 +3,7 @@ import math
 import os
 import time
 import uuid
+from decimal import Decimal
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -38,6 +39,30 @@ PLACE_DETAILS_QUOTA_COST = 17  # Place Details Basic
 DUPLICATE_DISTANCE_THRESHOLD_METERS = 50
 
 
+def _convert_floats_to_decimals(obj):
+    """
+    Recursively convert all float values to Decimal for DynamoDB compatibility.
+    
+    DynamoDB doesn't support Python's float type and requires Decimal instead.
+    This is particularly important for latitude/longitude coordinates.
+
+    Args:
+        obj: Object to convert (can be dict, list, float, or other types)
+
+    Returns:
+        Object with all floats converted to Decimals
+    """
+    if isinstance(obj, float):
+        # Convert float to Decimal, rounding to 8 decimal places for coordinates
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: _convert_floats_to_decimals(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_floats_to_decimals(item) for item in obj]
+    else:
+        return obj
+
+
 class GMapsScrapper(BaseScrapper):
     """
     Creates the AASI company web scrapping to collect general information.
@@ -54,9 +79,8 @@ class GMapsScrapper(BaseScrapper):
         super().__init__()
 
         # Set up default boto3 session with explicit region
-        region = os.environ.get('AWS_REGION_NAME', settings.region)
-        boto3.setup_default_session(region_name=region)
-        logger.info(f'boto3 default session configured for region: {region}')
+        boto3.setup_default_session(region_name=settings.region)
+        logger.info(f'boto3 default session configured for region: {settings.region}')
 
         self.niche = niche.lower()
         self.api_key = api_key
@@ -517,8 +541,7 @@ class GMapsScrapper(BaseScrapper):
                 )
                 return
 
-            region = os.environ.get('AWS_REGION_NAME', settings.region)
-            sqs_client = boto3.client('sqs', region_name=region)
+            sqs_client = boto3.client('sqs', region_name=settings.region)
             message_body = json.dumps(
                 {
                     'company_id': company_id,
@@ -599,10 +622,12 @@ class GMapsScrapper(BaseScrapper):
                                 break
 
                         if needs_update:
+                            # Convert floats to Decimals for DynamoDB
+                            converted_place = _convert_floats_to_decimals(place)
                             # Update existing place
                             self.db_handler.update_item(
                                 key={'placeID': place_id},
-                                updates=place,
+                                updates=converted_place,
                                 primary_key='placeID',
                             )
                             self.ensamble['stats']['updated_places'] += 1
@@ -633,6 +658,9 @@ class GMapsScrapper(BaseScrapper):
                     # Remove empty strings
                     company_data = {k: v for k, v in company_data.items() if v != ''}
 
+                    # Convert floats to Decimals for DynamoDB
+                    company_data = _convert_floats_to_decimals(company_data)
+
                     # Note: This requires a separate DatabaseHandler instance for companies table
                     companies_db = DatabaseHandler(
                         table_name=settings.get_table_name('companies')
@@ -650,6 +678,9 @@ class GMapsScrapper(BaseScrapper):
                         'companyID': company_id,
                         **place_without_id,
                     }
+
+                    # Convert floats to Decimals for DynamoDB
+                    place_data = _convert_floats_to_decimals(place_data)
 
                     self.db_handler.insert_item(item=place_data, primary_key='placeID')
 
