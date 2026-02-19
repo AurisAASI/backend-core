@@ -302,6 +302,7 @@ functions:
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
       - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:auris_tools:2
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:beautifulsoup4:2
 
   company_federal_scrapper:
     handler: src/functions/data_scrapper/company_federal_handler.company_federal_scrapper
@@ -335,7 +336,8 @@ functions:
           - "arn:aws:dynamodb:${self:provider.region}:${aws:accountId}:table/*"
     layers:
       - arn:aws:lambda:${self:provider.region}:017000801446:layer:AWSLambdaPowertoolsPythonV3-python310-x86_64:19
-      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:company_federal_scrapper:3
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:auris_tools:2
+      - arn:aws:lambda:${self:provider.region}:${aws:accountId}:layer:requests:2
 
   gl_add_new_lead:
     handler: src/functions/gl_add_new_lead/add_new_lead_handler.add_new_lead
