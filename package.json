@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Backend core services using Serverless Framework and AWS Lambda with Python 3.10",
   "scripts": {
+    "pack": "serverless package",
     "deploy:dev": "serverless deploy --stage dev",
     "deploy:prod": "serverless deploy --stage prod",
     "remove:dev": "serverless remove --stage dev",

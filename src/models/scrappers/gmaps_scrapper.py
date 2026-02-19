@@ -3,8 +3,10 @@ import math
 import os
 import time
 import uuid
+from decimal import Decimal
+from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import boto3
 import requests
@@ -38,6 +40,30 @@ PLACE_DETAILS_QUOTA_COST = 17  # Place Details Basic
 DUPLICATE_DISTANCE_THRESHOLD_METERS = 50
 
 
+def _convert_floats_to_decimals(obj):
+    """
+    Recursively convert all float values to Decimal for DynamoDB compatibility.
+
+    DynamoDB doesn't support Python's float type and requires Decimal instead.
+    This is particularly important for latitude/longitude coordinates.
+
+    Args:
+        obj: Object to convert (can be dict, list, float, or other types)
+
+    Returns:
+        Object with all floats converted to Decimals
+    """
+    if isinstance(obj, float):
+        # Convert float to Decimal, rounding to 8 decimal places for coordinates
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: _convert_floats_to_decimals(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_floats_to_decimals(item) for item in obj]
+    else:
+        return obj
+
+
 class GMapsScrapper(BaseScrapper):
     """
     Creates the AASI company web scrapping to collect general information.
@@ -54,9 +80,8 @@ class GMapsScrapper(BaseScrapper):
         super().__init__()
 
         # Set up default boto3 session with explicit region
-        region = os.environ.get('AWS_REGION_NAME', settings.region)
-        boto3.setup_default_session(region_name=region)
-        logger.info(f'boto3 default session configured for region: {region}')
+        boto3.setup_default_session(region_name=settings.region)
+        logger.info(f'boto3 default session configured for region: {settings.region}')
 
         self.niche = niche.lower()
         self.api_key = api_key
@@ -257,6 +282,23 @@ class GMapsScrapper(BaseScrapper):
         distance = R * c
         return distance
 
+    def _calculate_string_similarity(self, str1: str, str2: str) -> float:
+        """
+        Calculate string similarity using Levenshtein distance (difflib.SequenceMatcher).
+        Returns a value between 0.0 (completely different) and 1.0 (identical).
+
+        Args:
+            str1: First string to compare
+            str2: Second string to compare
+
+        Returns:
+            Similarity ratio (0.0-1.0)
+        """
+        if not str1 or not str2:
+            return 0.0
+
+        return SequenceMatcher(None, str1.lower().strip(), str2.lower().strip()).ratio()
+
     def _is_duplicate_location(
         self, new_lat: float, new_lng: float, existing_places: List[Dict]
     ) -> Optional[Dict]:
@@ -292,6 +334,138 @@ class GMapsScrapper(BaseScrapper):
                 return place
 
         return None
+
+    def _find_duplicate_place_in_database(
+        self, lat: float, lng: float, place_name: str
+    ) -> Optional[Tuple[str, float]]:
+        """
+        Query database for duplicate places based on location proximity.
+        Uses scan operation to find places within DUPLICATE_DISTANCE_THRESHOLD_METERS.
+
+        Args:
+            lat: Latitude of place to check
+            lng: Longitude of place to check
+            place_name: Name of place (for logging)
+
+        Returns:
+            Tuple of (placeID, distance) if duplicate found, None otherwise
+        """
+        if not self.db_handler:
+            logger.warning(
+                'Database handler not available, skipping database duplicate check'
+            )
+            return None
+
+        if lat is None or lng is None:
+            logger.warning(f'Invalid coordinates for place: {place_name}')
+            return None
+
+        try:
+            # Scan all places in database
+            logger.debug(
+                f'Scanning database for places near {place_name} ({lat}, {lng})'
+            )
+            response = self.db_handler.scan()
+            items = response.get('Items', [])
+
+            for item in items:
+                geometry = item.get('geometry', {})
+                location = geometry.get('location', {})
+                existing_lat = location.get('lat')
+                existing_lng = location.get('lng')
+
+                if existing_lat is None or existing_lng is None:
+                    logger.debug(
+                        f'Place {item.get("id", "unknown")} missing coordinates, skipping'
+                    )
+                    continue
+
+                # Convert Decimal back to float for distance calculation
+                if isinstance(existing_lat, Decimal):
+                    existing_lat = float(existing_lat)
+                if isinstance(existing_lng, Decimal):
+                    existing_lng = float(existing_lng)
+
+                distance = self._calculate_distance(
+                    lat, lng, existing_lat, existing_lng
+                )
+
+                if distance <= DUPLICATE_DISTANCE_THRESHOLD_METERS:
+                    logger.info(
+                        f'Duplicate place found in database: {item.get("name", "unknown")} '
+                        f'(ID: {item.get("id")}) - Distance: {distance:.2f}m'
+                    )
+                    return (item.get('id'), distance)
+
+            logger.debug(f'No duplicate found in database for {place_name}')
+            return None
+
+        except Exception as e:
+            logger.error(
+                f'Error querying database for place duplicates near {place_name}: {str(e)}'
+            )
+            return None
+
+    def _find_duplicate_company_by_name(
+        self, company_name: str, similarity_threshold: float = 0.80
+    ) -> Optional[Tuple[str, float]]:
+        """
+        Query database for duplicate companies based on name similarity (Levenshtein distance).
+        Uses scan operation to find companies with similar names.
+
+        Args:
+            company_name: Name of company to check
+            similarity_threshold: Similarity threshold (0.0-1.0), default 0.80 (80%)
+
+        Returns:
+            Tuple of (companyID, similarity_score) if duplicate found, None otherwise
+        """
+        if not DatabaseHandler:
+            logger.warning(
+                'DatabaseHandler not available, skipping company deduplication'
+            )
+            return None
+
+        if not company_name or not company_name.strip():
+            logger.warning('Company name is empty, skipping deduplication check')
+            return None
+
+        try:
+            # Create companies database handler
+            companies_db = DatabaseHandler(
+                table_name=settings.get_table_name('companies')
+            )
+
+            logger.debug(
+                f'Scanning companies database for similar name to: {company_name}'
+            )
+            response = companies_db.scan()
+            items = response.get('Items', [])
+
+            for item in items:
+                existing_name = item.get('name', '')
+                if not existing_name:
+                    continue
+
+                similarity = self._calculate_string_similarity(
+                    company_name, existing_name
+                )
+
+                if similarity >= similarity_threshold:
+                    logger.info(
+                        f'Duplicate company found in database: "{existing_name}" '
+                        f'(ID: {item.get("companyID")}) - Similarity: {similarity:.2%}'
+                    )
+                    return (item.get('companyID'), similarity)
+
+            logger.debug(f'No similar company found in database for: {company_name}')
+            return None
+
+        except Exception as e:
+            logger.error(
+                f'Error querying database for company name duplicates: {str(e)}'
+            )
+            return None
 
     def _check_quota(self, required_quota: int) -> bool:
         """
@@ -517,8 +691,7 @@ class GMapsScrapper(BaseScrapper):
                 )
                 return
 
-            region = os.environ.get('AWS_REGION_NAME', settings.region)
-            sqs_client = boto3.client('sqs', region_name=region)
+            sqs_client = boto3.client('sqs', region_name=settings.region)
             message_body = json.dumps(
                 {
                     'company_id': company_id,
@@ -545,7 +718,10 @@ class GMapsScrapper(BaseScrapper):
 
     def _save_to_database(self, city: str, state: str) -> bool:
         """
-        Save collected places to DynamoDB tables.
+        Save collected places to DynamoDB tables with advanced deduplication:
+        1. Check if place exists by ID
+        2. If not, check for duplicate by location proximity in database
+        3. If new place, check for duplicate company by name similarity (Levenshtein)
 
         Args:
             city: City name
@@ -558,12 +734,21 @@ class GMapsScrapper(BaseScrapper):
             logger.warning('Database handler not available, skipping database save')
             return False
 
-        logger.info(f'Starting database save for {len(self.ensamble["places"])} places')
+        logger.info(
+            f'Starting database save for {len(self.ensamble["places"])} places '
+            f'with advanced deduplication (location + name similarity checks)'
+        )
+
+        # Track additional statistics
+        duplicates_by_location = 0
+        duplicates_by_name = 0
 
         try:
             for place in self.ensamble['places']:
                 try:
                     place_id = place.get('id')
+                    place_name = place.get('name', 'Unknown')
+
                     if not place_id:
                         logger.warning('Place missing id, skipping')
                         continue
@@ -575,11 +760,17 @@ class GMapsScrapper(BaseScrapper):
 
                     if lat is None or lng is None:
                         logger.warning(
-                            f'Place {place_id} missing coordinates, skipping'
+                            f'Place {place_id} ({place_name}) missing coordinates, skipping'
                         )
                         continue
 
-                    # Check if place already exists in database
+                    # Log coordinates explicitly for debugging
+                    logger.debug(
+                        f'Processing place {place_id} ({place_name}) at coordinates: '
+                        f'lat={lat}, lng={lng}'
+                    )
+
+                    # Check 1: If place exists in database by ID
                     existing_place = None
                     try:
                         existing_place = self.db_handler.get_item(
@@ -599,21 +790,60 @@ class GMapsScrapper(BaseScrapper):
                                 break
 
                         if needs_update:
+                            # Convert floats to Decimals for DynamoDB
+                            converted_place = _convert_floats_to_decimals(place)
                             # Update existing place
                             self.db_handler.update_item(
                                 key={'placeID': place_id},
-                                updates=place,
+                                updates=converted_place,
                                 primary_key='placeID',
                             )
                             self.ensamble['stats']['updated_places'] += 1
                             logger.info(
-                                f'Updated place: {place.get("name")} (ID: {place_id})'
+                                f'Updated place: {place_name} (ID: {place_id}) '
+                                f'at ({lat}, {lng})'
                             )
                         else:
                             self.ensamble['stats']['skipped_places'] += 1
                             logger.debug(
-                                f'No changes for place: {place.get("name")} (ID: {place_id})'
+                                f'No changes for place: {place_name} (ID: {place_id})'
                             )
+                        continue
+
+                    # Check 2: Look for duplicate place by location in database
+                    logger.debug(
+                        f'Checking database for location-based duplicates for {place_name}'
+                    )
+                    duplicate_location = self._find_duplicate_place_in_database(
+                        lat, lng, place_name
+                    )
+                    if duplicate_location:
+                        duplicates_by_location += 1
+                        self.ensamble['stats']['duplicates_by_location'] += 1
+                        logger.warning(
+                            f'Skipping place {place_id} ({place_name}) - '
+                            f'Location duplicate found in database from previous run'
+                        )
+                        continue
+
+                    # Check 3: Check for duplicate company by name similarity
+                    logger.debug(
+                        f'Checking database for name-similar companies to: {place_name}'
+                    )
+                    duplicate_company = self._find_duplicate_company_by_name(
+                        place_name, similarity_threshold=0.80
+                    )
+                    if duplicate_company:
+                        company_id_found, similarity_score = duplicate_company
+                        duplicates_by_name += 1
+                        if 'duplicates_by_similarity' not in self.ensamble['stats']:
+                            self.ensamble['stats']['duplicates_by_similarity'] = 0
+                        self.ensamble['stats']['duplicates_by_similarity'] += 1
+                        logger.warning(
+                            f'Skipping place {place_id} ({place_name}) - '
+                            f'Company with {similarity_score:.2%} similar name already exists '
+                            f'(Company ID: {company_id_found})'
+                        )
                         continue
 
                     # New place - generate company ID and insert
@@ -622,8 +852,9 @@ class GMapsScrapper(BaseScrapper):
                     # Build company data using schema template
                     company_data = COMPANY_SCHEMA.copy()
                     company_data['companyID'] = company_id
+                    company_data['placeID'] = place_id
                     company_data['users'] = []
-                    company_data['name'] = place.get('name')
+                    company_data['name'] = place_name
                     company_data['city'] = city
                     company_data['state'] = state
                     company_data['niche'] = self.niche
@@ -633,6 +864,9 @@ class GMapsScrapper(BaseScrapper):
                     # Remove empty strings
                     company_data = {k: v for k, v in company_data.items() if v != ''}
 
+                    # Convert floats to Decimals for DynamoDB
+                    company_data = _convert_floats_to_decimals(company_data)
+
                     # Note: This requires a separate DatabaseHandler instance for companies table
                     companies_db = DatabaseHandler(
                         table_name=settings.get_table_name('companies')
@@ -641,6 +875,7 @@ class GMapsScrapper(BaseScrapper):
                         item=company_data,
                         primary_key='companyID',
                     )
+                    logger.debug(f'Inserted company: {place_name} (ID: {company_id})')
 
                     # Insert place record with companyID link
                     # Exclude 'id' from place data since we store it as 'placeID'
@@ -651,12 +886,29 @@ class GMapsScrapper(BaseScrapper):
                         **place_without_id,
                     }
 
+                    # Log the place data with coordinates before conversion
+                    logger.debug(
+                        f'Saving place data: {place_data.get("name")} '
+                        f'with geometry: {place_data.get("geometry")}'
+                    )
+
+                    # Convert floats to Decimals for DynamoDB
+                    place_data = _convert_floats_to_decimals(place_data)
+
+                    # Log after conversion for verification
+                    logger.debug(
+                        f'After Decimal conversion - coordinates: '
+                        f'lat={place_data.get("geometry", {}).get("location", {}).get("lat")}, '
+                        f'lng={place_data.get("geometry", {}).get("location", {}).get("lng")}'
+                    )
+
                     self.db_handler.insert_item(item=place_data, primary_key='placeID')
 
                     self.ensamble['stats']['new_places'] += 1
                     logger.info(
-                        f'Inserted new place: {place.get("name")} '
-                        f'(Place ID: {place_id}, Company ID: {company_id})'
+                        f'Inserted new place: {place_name} '
+                        f'(Place ID: {place_id}, Company ID: {company_id}) '
+                        f'at coordinates: ({lat}, {lng})'
                     )
 
                     # Queue website scraping task if website is present
@@ -671,19 +923,23 @@ class GMapsScrapper(BaseScrapper):
 
                 except Exception as e:
                     logger.error(
-                        f'Error saving individual place {place.get("id")}: {str(e)}'
+                        f'Error saving individual place {place.get("id")}: {str(e)}',
+                        exc_info=True,
                     )
                     continue
 
             logger.info(
-                f'Database save completed - New: {self.ensamble["stats"]["new_places"]}, '
+                f'Database save completed - '
+                f'New: {self.ensamble["stats"]["new_places"]}, '
                 f'Updated: {self.ensamble["stats"]["updated_places"]}, '
-                f'Skipped: {self.ensamble["stats"]["skipped_places"]}'
+                f'Skipped: {self.ensamble["stats"]["skipped_places"]}, '
+                f'Location Duplicates (database): {duplicates_by_location}, '
+                f'Name Duplicates (80%+ similarity): {duplicates_by_name}'
             )
             return True
 
         except Exception as e:
-            logger.error(f'Error during database save: {str(e)}')
+            logger.error(f'Error during database save: {str(e)}', exc_info=True)
             self.ensamble['status'] = 'failed_database_error'
             self.ensamble['status_reason'] = f'Database save failed: {str(e)}'
             return False

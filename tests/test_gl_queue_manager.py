@@ -27,7 +27,7 @@ def mock_env_vars(monkeypatch):
     """Mock environment variables for settings."""
     monkeypatch.setenv('STAGE', 'dev')
     monkeypatch.setenv('REGION', 'us-east-1')
-    monkeypatch.setenv('ACCOUNT_ID', '819774487459')
+    monkeypatch.setenv('AWS_ACCOUNT_ID', '819774487459')
     monkeypatch.setenv(
         'OPERATIONS_QUEUE_URL',
         'https://sqs.us-east-1.amazonaws.com/819774487459/backend-core-dev-gl-operations-queue',
