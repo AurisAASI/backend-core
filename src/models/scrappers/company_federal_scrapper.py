@@ -1,8 +1,11 @@
 """
-Company Federal Scrapper for fetching federal company data from OpenCNPJ API.
+Company Federal Scrapper for fetching federal company data from Brasil API.
 
-This module fetches comprehensive company information from the OpenCNPJ public API
-using CNPJ numbers extracted from websites.
+This module fetches comprehensive company information from the Brasil API public service
+using CNPJ numbers extracted from websites. Brasil API is a collaborative, modern solution
+that consumes multiple sources including "Minha Receita" project.
+
+No token required for basic queries - fast, reliable, and well-documented.
 """
 
 import time
@@ -19,18 +22,22 @@ from src.shared.settings import settings
 # Configure logger
 logger = Logger(service='company-federal-scraper')
 
-# OpenCNPJ API constants
-OPENCNPJ_API_URL = 'https://kitana.opencnpj.com/cnpj'
-REQUEST_TIMEOUT = 5
+# Brasil API constants
+BRASIL_API_URL = 'https://brasilapi.com.br/api/cnpj/v1'
+REQUEST_TIMEOUT = 15  # Increased from 5 to 15 seconds (connection + read timeout)
 RATE_LIMIT_DELAY = 0.1  # 0.1 second between requests
+MAX_RETRIES = 2  # Retry failed requests up to 2 times
 
 
 class CompanyFederalScrapper(BaseScrapper):
     """
-    Scrapper for federal company data from OpenCNPJ API.
+    Scrapper for federal company data from Brasil API.
 
-    This class fetches official company information from the Brazilian federal
-    registry using CNPJ numbers and saves enriched data to DynamoDB.
+    This class fetches official company information from Brazil's federal registry
+    using CNPJ numbers and saves enriched data to DynamoDB.
+
+    Brasil API aggregates data from multiple sources (Minha Receita project, etc)
+    and provides fast, reliable access without requiring API tokens.
 
     Args:
         company_id (str): UUID of the company in the database
@@ -42,13 +49,10 @@ class CompanyFederalScrapper(BaseScrapper):
         super().__init__()
 
         # Set up default boto3 session with explicit region
-        import os
-
         import boto3
 
-        region = os.environ.get('AWS_REGION_NAME', settings.region)
-        boto3.setup_default_session(region_name=region)
-        logger.info(f'boto3 default session configured for region: {region}')
+        boto3.setup_default_session(region_name=settings.region)
+        logger.info(f'boto3 default session configured for region: {settings.region}')
 
         self.company_id = company_id
         self.cnpj = cnpj
@@ -75,72 +79,135 @@ class CompanyFederalScrapper(BaseScrapper):
 
     def _fetch_opencnpj_data(self) -> Optional[Dict]:
         """
-        Fetch company data from OpenCNPJ API.
+        Fetch company data from Brasil API with retry logic.
+
+        Brasil API consolidates data from multiple sources (Minha Receita project, etc)
+        and provides fast, reliable access without requiring API tokens.
 
         Returns:
             Dict with company data or None on error
         """
-        try:
-            url = f'{OPENCNPJ_API_URL}/{self.cnpj}'
-            logger.info(f'Fetching data from OpenCNPJ API: {url}')
+        url = f'{BRASIL_API_URL}/{self.cnpj}'
+        logger.info(f'Fetching data from Brasil API: {url}')
 
-            # Rate limiting
-            time.sleep(RATE_LIMIT_DELAY)
+        for attempt in range(1, MAX_RETRIES + 2):  # +2 for initial attempt + retries
+            try:
+                # Rate limiting
+                if attempt > 1:
+                    wait_time = 2 ** (attempt - 1)  # Exponential backoff: 2, 4, 8 seconds
+                    logger.info(
+                        f'Retry attempt {attempt} for CNPJ {self.cnpj} - '
+                        f'waiting {wait_time}s before retry'
+                    )
+                    time.sleep(wait_time)
+                else:
+                    time.sleep(RATE_LIMIT_DELAY)
 
-            response = requests.get(
-                url,
-                timeout=REQUEST_TIMEOUT,
-                headers={'User-Agent': 'AurisBot/1.0 (+https://auris.com.br/bot)'},
-            )
+                response = requests.get(
+                    url,
+                    timeout=REQUEST_TIMEOUT,
+                    headers={'User-Agent': 'AurisBot/1.0 (+https://leadcontrol.ia.br)'},
+                )
 
-            # Check status code
-            if response.status_code == 200:
-                data = response.json()
-                logger.info(f'Successfully fetched OpenCNPJ data for CNPJ: {self.cnpj}')
-                return data
-            elif response.status_code == 404:
-                logger.warning(f'CNPJ not found in OpenCNPJ: {self.cnpj}')
-                self.ensamble['status'] = 'completed'
-                self.ensamble['status_reason'] = 'CNPJ not found in federal registry'
-                return None
-            elif response.status_code == 429:
-                logger.warning(f'Rate limit exceeded for OpenCNPJ API')
+                # Check status code
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(
+                        f'Successfully fetched Brasil API data for CNPJ: {self.cnpj} '
+                        f'(attempt {attempt})'
+                    )
+                    return data
+                elif response.status_code == 404:
+                    logger.warning(f'CNPJ not found in Brasil API: {self.cnpj}')
+                    self.ensamble['status'] = 'completed'
+                    self.ensamble['status_reason'] = 'CNPJ not found in federal registry'
+                    return None
+                elif response.status_code == 429:
+                    # Rate limit - retry might help
+                    if attempt <= MAX_RETRIES:
+                        logger.warning(
+                            f'Rate limit exceeded for Brasil API (attempt {attempt}), '
+                            f'will retry'
+                        )
+                        continue
+                    else:
+                        logger.error(f'Rate limit exceeded for Brasil API (all retries failed)')
+                        self.ensamble['status'] = 'failed'
+                        self.ensamble['status_reason'] = 'API rate limit exceeded'
+                        return None
+                else:
+                    logger.error(
+                        f'Brasil API returned status {response.status_code}: '
+                        f'{response.text}'
+                    )
+                    self.ensamble['status'] = 'failed'
+                    self.ensamble['status_reason'] = f'API error: HTTP {response.status_code}'
+                    return None
+
+            except requests.exceptions.ConnectTimeout as e:
+                logger.warning(
+                    f'Connection timeout fetching from Brasil API (attempt {attempt}/{MAX_RETRIES + 1}): {str(e)}'
+                )
+                if attempt > MAX_RETRIES:
+                    logger.error(
+                        f'All retry attempts exhausted for CNPJ {self.cnpj}. '
+                        f'Brasil API connection timeout.'
+                    )
+                    self.ensamble['status'] = 'failed'
+                    self.ensamble[
+                        'status_reason'
+                    ] = f'API connection timeout (after {attempt} attempts)'
+                    return None
+                continue
+
+            except requests.exceptions.ReadTimeout as e:
+                logger.warning(
+                    f'Read timeout fetching from Brasil API (attempt {attempt}/{MAX_RETRIES + 1}): {str(e)}'
+                )
+                if attempt > MAX_RETRIES:
+                    logger.error(f'All retry attempts exhausted for CNPJ {self.cnpj}. Brasil API read timeout.')
+                    self.ensamble['status'] = 'failed'
+                    self.ensamble['status_reason'] = f'API read timeout (after {attempt} attempts)'
+                    return None
+                continue
+
+            except requests.exceptions.Timeout as e:
+                logger.warning(
+                    f'General timeout fetching from Brasil API (attempt {attempt}/{MAX_RETRIES + 1}): {str(e)}'
+                )
+                if attempt > MAX_RETRIES:
+                    logger.error(f'All retry attempts exhausted for CNPJ {self.cnpj}. Brasil API timeout.')
+                    self.ensamble['status'] = 'failed'
+                    self.ensamble['status_reason'] = f'API request timeout (after {attempt} attempts)'
+                    return None
+                continue
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f'Request error fetching Brasil API data (attempt {attempt}): {str(e)}')
                 self.ensamble['status'] = 'failed'
-                self.ensamble['status_reason'] = 'API rate limit exceeded'
+                self.ensamble['status_reason'] = f'API request failed: {str(e)}'
                 return None
-            else:
+
+            except Exception as e:
                 logger.error(
-                    f'OpenCNPJ API returned status {response.status_code}: '
-                    f'{response.text}'
+                    f'Unexpected error fetching Brasil API data (attempt {attempt}): {str(e)}'
                 )
                 self.ensamble['status'] = 'failed'
-                self.ensamble[
-                    'status_reason'
-                ] = f'API error: HTTP {response.status_code}'
+                self.ensamble['status_reason'] = f'Unexpected error: {str(e)}'
                 return None
 
-        except requests.exceptions.Timeout:
-            logger.error(f'Timeout fetching data from OpenCNPJ for CNPJ: {self.cnpj}')
-            self.ensamble['status'] = 'failed'
-            self.ensamble['status_reason'] = 'API request timeout'
-            return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f'Request error fetching OpenCNPJ data: {str(e)}')
-            self.ensamble['status'] = 'failed'
-            self.ensamble['status_reason'] = f'API request failed: {str(e)}'
-            return None
-        except Exception as e:
-            logger.error(f'Unexpected error fetching OpenCNPJ data: {str(e)}')
-            self.ensamble['status'] = 'failed'
-            self.ensamble['status_reason'] = f'Unexpected error: {str(e)}'
-            return None
+        # All retries exhausted
+        logger.error(f'Failed to fetch Brasil API data for CNPJ {self.cnpj} after all retry attempts')
+        self.ensamble['status'] = 'failed'
+        self.ensamble['status_reason'] = 'API request failed - max retries exceeded'
+        return None
 
     def _save_to_database(self, federal_data: Dict) -> bool:
         """
         Save fetched federal data to DynamoDB companies table.
 
         Args:
-            federal_data: Federal company data from OpenCNPJ
+            federal_data: Federal company data from Brasil API
 
         Returns:
             True if successful, False otherwise
@@ -184,7 +251,7 @@ class CompanyFederalScrapper(BaseScrapper):
 
         This method:
         1. Validates the CNPJ number
-        2. Fetches data from OpenCNPJ API
+        2. Fetches data from Brasil API
         3. Saves enriched data to database
         """
         logger.info(
@@ -197,7 +264,7 @@ class CompanyFederalScrapper(BaseScrapper):
             if not self.cnpj or len(self.cnpj) != 14:
                 raise ValueError(f'Invalid CNPJ format: {self.cnpj}')
 
-            # Fetch data from OpenCNPJ API
+            # Fetch data from Brasil API
             federal_data = self._fetch_opencnpj_data()
 
             # Check if data was fetched

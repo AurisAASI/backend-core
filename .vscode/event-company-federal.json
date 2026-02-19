@@ -2,7 +2,7 @@
   "Records": [
     {
       "messageId": "test-message-789",
-      "body": "{\"company_id\": \"test-company-123\", \"cnpj\": \"45.523.817/0001-82\"}"
+      "body": "{\"company_id\": \"896504cc-bd92-448b-bc92-74bfcd2c73c2\", \"cnpj\": \"45.523.817/0001-82\"}"
     }
   ]
 }
