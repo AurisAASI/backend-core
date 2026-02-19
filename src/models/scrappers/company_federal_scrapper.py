@@ -94,7 +94,9 @@ class CompanyFederalScrapper(BaseScrapper):
             try:
                 # Rate limiting
                 if attempt > 1:
-                    wait_time = 2 ** (attempt - 1)  # Exponential backoff: 2, 4, 8 seconds
+                    wait_time = 2 ** (
+                        attempt - 1
+                    )  # Exponential backoff: 2, 4, 8 seconds
                     logger.info(
                         f'Retry attempt {attempt} for CNPJ {self.cnpj} - '
                         f'waiting {wait_time}s before retry'
@@ -120,7 +122,9 @@ class CompanyFederalScrapper(BaseScrapper):
                 elif response.status_code == 404:
                     logger.warning(f'CNPJ not found in Brasil API: {self.cnpj}')
                     self.ensamble['status'] = 'completed'
-                    self.ensamble['status_reason'] = 'CNPJ not found in federal registry'
+                    self.ensamble[
+                        'status_reason'
+                    ] = 'CNPJ not found in federal registry'
                     return None
                 elif response.status_code == 429:
                     # Rate limit - retry might help
@@ -131,7 +135,9 @@ class CompanyFederalScrapper(BaseScrapper):
                         )
                         continue
                     else:
-                        logger.error(f'Rate limit exceeded for Brasil API (all retries failed)')
+                        logger.error(
+                            f'Rate limit exceeded for Brasil API (all retries failed)'
+                        )
                         self.ensamble['status'] = 'failed'
                         self.ensamble['status_reason'] = 'API rate limit exceeded'
                         return None
@@ -141,7 +147,9 @@ class CompanyFederalScrapper(BaseScrapper):
                         f'{response.text}'
                     )
                     self.ensamble['status'] = 'failed'
-                    self.ensamble['status_reason'] = f'API error: HTTP {response.status_code}'
+                    self.ensamble[
+                        'status_reason'
+                    ] = f'API error: HTTP {response.status_code}'
                     return None
 
             except requests.exceptions.ConnectTimeout as e:
@@ -165,9 +173,13 @@ class CompanyFederalScrapper(BaseScrapper):
                     f'Read timeout fetching from Brasil API (attempt {attempt}/{MAX_RETRIES + 1}): {str(e)}'
                 )
                 if attempt > MAX_RETRIES:
-                    logger.error(f'All retry attempts exhausted for CNPJ {self.cnpj}. Brasil API read timeout.')
+                    logger.error(
+                        f'All retry attempts exhausted for CNPJ {self.cnpj}. Brasil API read timeout.'
+                    )
                     self.ensamble['status'] = 'failed'
-                    self.ensamble['status_reason'] = f'API read timeout (after {attempt} attempts)'
+                    self.ensamble[
+                        'status_reason'
+                    ] = f'API read timeout (after {attempt} attempts)'
                     return None
                 continue
 
@@ -176,14 +188,20 @@ class CompanyFederalScrapper(BaseScrapper):
                     f'General timeout fetching from Brasil API (attempt {attempt}/{MAX_RETRIES + 1}): {str(e)}'
                 )
                 if attempt > MAX_RETRIES:
-                    logger.error(f'All retry attempts exhausted for CNPJ {self.cnpj}. Brasil API timeout.')
+                    logger.error(
+                        f'All retry attempts exhausted for CNPJ {self.cnpj}. Brasil API timeout.'
+                    )
                     self.ensamble['status'] = 'failed'
-                    self.ensamble['status_reason'] = f'API request timeout (after {attempt} attempts)'
+                    self.ensamble[
+                        'status_reason'
+                    ] = f'API request timeout (after {attempt} attempts)'
                     return None
                 continue
 
             except requests.exceptions.RequestException as e:
-                logger.error(f'Request error fetching Brasil API data (attempt {attempt}): {str(e)}')
+                logger.error(
+                    f'Request error fetching Brasil API data (attempt {attempt}): {str(e)}'
+                )
                 self.ensamble['status'] = 'failed'
                 self.ensamble['status_reason'] = f'API request failed: {str(e)}'
                 return None
@@ -197,7 +215,9 @@ class CompanyFederalScrapper(BaseScrapper):
                 return None
 
         # All retries exhausted
-        logger.error(f'Failed to fetch Brasil API data for CNPJ {self.cnpj} after all retry attempts')
+        logger.error(
+            f'Failed to fetch Brasil API data for CNPJ {self.cnpj} after all retry attempts'
+        )
         self.ensamble['status'] = 'failed'
         self.ensamble['status_reason'] = 'API request failed - max retries exceeded'
         return None

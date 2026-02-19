@@ -43,7 +43,7 @@ DUPLICATE_DISTANCE_THRESHOLD_METERS = 50
 def _convert_floats_to_decimals(obj):
     """
     Recursively convert all float values to Decimal for DynamoDB compatibility.
-    
+
     DynamoDB doesn't support Python's float type and requires Decimal instead.
     This is particularly important for latitude/longitude coordinates.
 
@@ -296,7 +296,7 @@ class GMapsScrapper(BaseScrapper):
         """
         if not str1 or not str2:
             return 0.0
-        
+
         return SequenceMatcher(None, str1.lower().strip(), str2.lower().strip()).ratio()
 
     def _is_duplicate_location(
@@ -351,7 +351,9 @@ class GMapsScrapper(BaseScrapper):
             Tuple of (placeID, distance) if duplicate found, None otherwise
         """
         if not self.db_handler:
-            logger.warning('Database handler not available, skipping database duplicate check')
+            logger.warning(
+                'Database handler not available, skipping database duplicate check'
+            )
             return None
 
         if lat is None or lng is None:
@@ -360,7 +362,9 @@ class GMapsScrapper(BaseScrapper):
 
         try:
             # Scan all places in database
-            logger.debug(f'Scanning database for places near {place_name} ({lat}, {lng})')
+            logger.debug(
+                f'Scanning database for places near {place_name} ({lat}, {lng})'
+            )
             response = self.db_handler.scan()
             items = response.get('Items', [])
 
@@ -382,7 +386,9 @@ class GMapsScrapper(BaseScrapper):
                 if isinstance(existing_lng, Decimal):
                     existing_lng = float(existing_lng)
 
-                distance = self._calculate_distance(lat, lng, existing_lat, existing_lng)
+                distance = self._calculate_distance(
+                    lat, lng, existing_lat, existing_lng
+                )
 
                 if distance <= DUPLICATE_DISTANCE_THRESHOLD_METERS:
                     logger.info(
@@ -415,7 +421,9 @@ class GMapsScrapper(BaseScrapper):
             Tuple of (companyID, similarity_score) if duplicate found, None otherwise
         """
         if not DatabaseHandler:
-            logger.warning('DatabaseHandler not available, skipping company deduplication')
+            logger.warning(
+                'DatabaseHandler not available, skipping company deduplication'
+            )
             return None
 
         if not company_name or not company_name.strip():
@@ -428,7 +436,9 @@ class GMapsScrapper(BaseScrapper):
                 table_name=settings.get_table_name('companies')
             )
 
-            logger.debug(f'Scanning companies database for similar name to: {company_name}')
+            logger.debug(
+                f'Scanning companies database for similar name to: {company_name}'
+            )
             response = companies_db.scan()
             items = response.get('Items', [])
 
@@ -437,7 +447,9 @@ class GMapsScrapper(BaseScrapper):
                 if not existing_name:
                     continue
 
-                similarity = self._calculate_string_similarity(company_name, existing_name)
+                similarity = self._calculate_string_similarity(
+                    company_name, existing_name
+                )
 
                 if similarity >= similarity_threshold:
                     logger.info(
@@ -736,7 +748,7 @@ class GMapsScrapper(BaseScrapper):
                 try:
                     place_id = place.get('id')
                     place_name = place.get('name', 'Unknown')
-                    
+
                     if not place_id:
                         logger.warning('Place missing id, skipping')
                         continue
@@ -863,9 +875,7 @@ class GMapsScrapper(BaseScrapper):
                         item=company_data,
                         primary_key='companyID',
                     )
-                    logger.debug(
-                        f'Inserted company: {place_name} (ID: {company_id})'
-                    )
+                    logger.debug(f'Inserted company: {place_name} (ID: {company_id})')
 
                     # Insert place record with companyID link
                     # Exclude 'id' from place data since we store it as 'placeID'
@@ -914,7 +924,7 @@ class GMapsScrapper(BaseScrapper):
                 except Exception as e:
                     logger.error(
                         f'Error saving individual place {place.get("id")}: {str(e)}',
-                        exc_info=True
+                        exc_info=True,
                     )
                     continue
 
