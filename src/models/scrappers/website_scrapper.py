@@ -61,9 +61,8 @@ class WebsiteScrapper(BaseScrapper):
         super().__init__()
 
         # Set up default boto3 session with explicit region
-        region = os.environ.get('AWS_REGION_NAME', settings.region)
-        boto3.setup_default_session(region_name=region)
-        logger.info(f'boto3 default session configured for region: {region}')
+        boto3.setup_default_session(region_name=settings.region)
+        logger.info(f'boto3 default session configured for region: {settings.region}')
 
         self.company_id = company_id
         self.website = self._normalize_url(website)
@@ -764,8 +763,7 @@ Return ONLY valid JSON following the schema provided."""
                 )
                 return
 
-            region = os.environ.get('AWS_REGION_NAME', settings.region)
-            sqs_client = boto3.client('sqs', region_name=region)
+            sqs_client = boto3.client('sqs', region_name=settings.region)
             message_body = json.dumps(
                 {
                     'company_id': company_id,
